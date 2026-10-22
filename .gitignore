@@ -1,0 +1,16 @@
+node_modules/
+dist/
+artifacts/
+.wrangler/
+.env
+.env.*
+!.env.example
+.dev.vars*
+__pycache__/
+*.pyc
+data-downloads/
+*.osm.pbf
+*.pmtiles
+*.tif
+*.tiff
+*.log
