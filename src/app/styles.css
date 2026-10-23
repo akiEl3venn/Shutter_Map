@@ -11,7 +11,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; }
-button { font: inherit; }
+button, input { font: inherit; }
 button {
   min-height: 44px;
   padding: 0.75rem 1.25rem;
@@ -54,6 +54,24 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
 .error { font-size: 0.875rem; color: #9c3429; margin-bottom: 0.75rem; }
 .file-input { display: none; }
 .drop-overlay { pointer-events: none; position: fixed; inset: 1rem; display: grid; place-items: center; background: #f4f6f0ed; border: 2px dashed var(--accent); border-radius: 8px; font-size: 1.25rem; font-weight: 600; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.place-search { position: relative; margin-bottom: 1.25rem; }
+.place-search input { display: block; width: 100%; min-height: 44px; min-width: 0; padding: 0.75rem; color: inherit; background: var(--surface); border: 1px solid #868d81; border-radius: 6px; }
+.place-search input:focus-visible { outline: 2px solid #697f63; outline-offset: 2px; }
+.place-search input::placeholder { color: var(--muted); }
+.search-hint { margin-top: 0.5rem; }
+.search-results { margin-top: 0.75rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.search-results ul { max-height: 360px; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+.search-option { padding: 0.75rem; min-height: 64px; cursor: pointer; overflow-wrap: anywhere; }
+.search-option + .search-option { border-top: 1px solid var(--line); }
+.search-option[aria-selected="true"] { background: #e9eee5; box-shadow: inset 3px 0 var(--accent); }
+.result-name, .result-description { display: block; line-height: 1.5; }
+.result-name { font-size: 0.9375rem; }
+.result-name small { margin-left: 0.5rem; color: var(--muted); font-size: 0.8125rem; }
+.result-description { margin-top: 0.2rem; color: var(--muted); font-size: 0.75rem; }
+.search-message { padding: 0.75rem; font-size: 0.8125rem; }
+.retry-search { margin: 0 0.75rem 0.75rem; }
+.restore-location, .geo-attribution { margin-top: 1rem; }
 
 @media (max-width: 760px) {
   .app { padding: 1rem; }

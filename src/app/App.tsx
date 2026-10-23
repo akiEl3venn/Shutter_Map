@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import type { PhotoSession } from '../contracts.ts';
+import type { LocationChoice, PhotoSession } from '../contracts.ts';
 import { toLonLat } from '../location/gps.ts';
 import { readExif } from '../photo/exif.ts';
 import { loadPhoto } from '../photo/loadPhoto.ts';
 import { strings } from './strings.ts';
+import { PlaceSearch } from './PlaceSearch.tsx';
 
 function PhotoCanvas({ preview }: { preview: ImageBitmap | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -42,44 +43,42 @@ function PhotoCanvas({ preview }: { preview: ImageBitmap | null }) {
 }
 
 export function App() {
-  const [session, setSession] = useState<PhotoSession | null>(null);
+  const [photo, setPhoto] = useState<PhotoSession | null>(null);
+  const [location, setLocation] = useState<LocationChoice | null>(null);
   const [orientation, setOrientation] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<ImageBitmap | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const previewRef = useRef<ImageBitmap | null>(null);
   const requestId = useRef(0);
   const dragDepth = useRef(0);
 
-  useEffect(() => () => {
-    requestId.current += 1;
-    previewRef.current?.close();
-    previewRef.current = null;
-  }, []);
+  // Release a bitmap only after React has committed its replacement, so no draw can see it closed.
+  useEffect(() => () => preview?.close(), [preview]);
+  useEffect(() => () => { requestId.current += 1; }, []);
 
   async function selectPhoto(file: File) {
     const id = ++requestId.current;
     setLoading(true);
     setError(null);
     try {
-      const [exif, photo] = await Promise.all([readExif(file), loadPhoto(file)]);
+      const [exif, decoded] = await Promise.all([readExif(file), loadPhoto(file)]);
       if (id !== requestId.current) {
-        photo.preview.close();
+        decoded.preview.close();
         return;
       }
-      const selectedLocation = toLonLat(exif.gps);
-      const oldPreview = previewRef.current;
-      previewRef.current = photo.preview;
-      setSession({
+      const exifLocation = toLonLat(exif.gps);
+      setPreview(decoded.preview);
+      setPhoto({
         file,
-        orientedWidthPx: photo.orientedWidthPx,
-        orientedHeightPx: photo.orientedHeightPx,
-        selectedLocation,
-        locationSource: selectedLocation ? 'exif' : null,
+        orientedWidthPx: decoded.orientedWidthPx,
+        orientedHeightPx: decoded.orientedHeightPx,
+        exifLocation,
       });
+      setLocation(current => exifLocation ? { coordinate: exifLocation, source: 'exif' }
+        : current?.source === 'exif' ? null : current);
       setOrientation(exif.orientation);
-      oldPreview?.close();
     } catch (failure) {
       if (id !== requestId.current) return;
       const unsupported = typeof failure === 'object' && failure !== null
@@ -98,7 +97,9 @@ export function App() {
     if (file) void selectPhoto(file);
   }
 
-  const location = session?.selectedLocation;
+  const canRestore = photo?.exifLocation && (!location
+    || photo.exifLocation[0] !== location.coordinate[0]
+    || photo.exifLocation[1] !== location.coordinate[1]);
   return (
     <main className="app"
       onDragEnter={event => {
@@ -130,8 +131,8 @@ export function App() {
         }} />
       <div className="workspace" aria-busy={loading}>
         <section className="preview-area" aria-label={strings.previewLabel}>
-          <PhotoCanvas preview={previewRef.current} />
-          {!session && <div className="empty-preview">
+          <PhotoCanvas preview={preview} />
+          {!photo && <div className="empty-preview">
             <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
             <p>{strings.dropHint}</p><p className="muted">{strings.formatHint}</p>
           </div>}
@@ -139,9 +140,9 @@ export function App() {
         <aside className="sidebar">
           <section>
             <h2>{strings.photoInformation}</h2>
-            {session ? <>
+            {photo ? <>
               <dl><dt>{strings.sourceDimensions}</dt>
-                <dd className="dimensions">{strings.dimensions(session.orientedWidthPx, session.orientedHeightPx)}</dd>
+                <dd className="dimensions">{strings.dimensions(photo.orientedWidthPx, photo.orientedHeightPx)}</dd>
                 <dt>{strings.orientation}</dt><dd>{orientation ?? strings.noOrientation}</dd>
               </dl>
               <button type="button" className="secondary" onClick={() => inputRef.current?.click()}>{strings.replacePhoto}</button>
@@ -149,15 +150,24 @@ export function App() {
           </section>
           <section>
             <h2>{strings.location}</h2>
+            <PlaceSearch location={location} onChange={setLocation}
+              prefetch={photo !== null && photo.exifLocation === null} />
             {location ? <>
-              <p className="source-label">{strings.exifSource}</p>
-              <p className="coordinates">{strings.coordinates(location[0], location[1])}</p>
+              <p className="source-label">{location.source === 'exif' ? strings.exifSource
+                : location.source === 'search' ? strings.searchSource(location.place?.name ?? '')
+                : strings.coordinateSource}</p>
+              <p className="coordinates">{strings.coordinates(location.coordinate[0], location.coordinate[1])}</p>
               <p className="muted">{strings.coordinateOrder}</p>
               <p className="location-note">{strings.locationNote}</p>
-            </> : <p>{session ? strings.noGps : strings.waitingLocation}</p>}
+            </> : <p>{strings.noLocation}</p>}
+            {canRestore && <button type="button" className="secondary restore-location"
+              onClick={() => setLocation({ coordinate: photo.exifLocation!, source: 'exif' })}>
+              {strings.restorePhotoLocation}
+            </button>}
+            <p className="muted geo-attribution">{strings.geoAttribution}</p>
           </section>
           <div className="status-area">
-            <p className="status" role="status">{loading ? strings.loading : error ? '' : session ? strings.loaded : strings.waiting}</p>
+            <p className="status" role="status">{loading ? strings.loading : error ? '' : photo ? strings.loaded : strings.waiting}</p>
             {error && <p className="error" role="alert">{error}</p>}
             <p className="muted">{strings.sessionNote}</p>
           </div>

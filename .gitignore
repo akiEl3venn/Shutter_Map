@@ -9,6 +9,7 @@ artifacts/
 __pycache__/
 *.pyc
 data-downloads/
+public/geo-*/
 *.osm.pbf
 *.pmtiles
 *.tif

@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "names:check": "node scripts/build-geo.mjs --check-names"
   },
   "dependencies": {
     "react": "19.3.1",

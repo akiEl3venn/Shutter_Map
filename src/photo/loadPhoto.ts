@@ -38,7 +38,7 @@ function bitmapHonorsOrientation(): Promise<boolean> {
     } finally {
       canvas.width = canvas.height = 0;
     }
-  })();
+  })().catch(() => true); // A failed probe must not block every photo; current engines honor EXIF.
   return orientationSupport;
 }
 
@@ -76,9 +76,10 @@ async function canvasPreview(
 
 export async function loadPhoto(file: File): Promise<LoadedPhoto> {
   const unsupported = () => Object.assign(new Error('unsupported-format'), { code: 'unsupported-format' });
-  // These formats are explicitly outside this slice, even if an OS codec exists.
-  if (/\.(heic|heif|hif|raw|dng|cr2|cr3|nef|nrw|arw|srf|sr2|orf|raf|rw2|pef|3fr|fff|iiq|kdc|mos|mrw|dcr|rwl|x3f)$/i.test(file.name)
-      || /^image\/(heic|heif)(-sequence)?$/i.test(file.type) || /raw|adobe-dng/i.test(file.type)) {
+  // RAW stays out even if an OS codec exists: it may decode an embedded preview, not full resolution.
+  // HEIC is left to the browser (Safari decodes it); engines without a codec reject below.
+  if (/\.(raw|dng|cr2|cr3|nef|nrw|arw|srf|sr2|orf|raf|rw2|pef|3fr|fff|iiq|kdc|mos|mrw|dcr|rwl|x3f)$/i.test(file.name)
+      || /raw|adobe-dng/i.test(file.type)) {
     throw unsupported();
   }
 

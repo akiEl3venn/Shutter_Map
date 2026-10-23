@@ -30,6 +30,8 @@ export interface Tileset {
 
 /** A hit from the local fuzzy search or the cascade; queries never leave the browser. */
 export interface PlaceResult {
+  id?: number;
+  matchedName?: string;
   kind: 'city' | 'landmark' | 'coordinate';
   /** GeoNames feature code for landmarks, e.g. 'MUS' or 'PK'. */
   featureCode?: string;
@@ -49,8 +51,15 @@ export interface PhotoSession {
   file: File;
   orientedWidthPx: ImagePixels;
   orientedHeightPx: ImagePixels;
-  selectedLocation: LonLat | null;
-  locationSource: 'exif' | 'manual' | null;
+  /** Kept in memory for restoring the photo's original position. */
+  exifLocation: LonLat | null;
+}
+
+export interface LocationChoice {
+  coordinate: LonLat;
+  source: 'exif' | 'search' | 'coordinate';
+  /** Present when the source is search. */
+  place?: PlaceResult;
 }
 
 export interface MapComposition {
