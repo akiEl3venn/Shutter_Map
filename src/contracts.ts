@@ -38,6 +38,7 @@ export interface PlaceResult {
   name: string;
   coordinate: LonLat;
   countryCode?: string;
+  admin1Code?: string;
   admin1?: string;
 }
 

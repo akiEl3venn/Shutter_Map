@@ -15,15 +15,18 @@ function describe(place: PlaceResult): string {
   return [type, [place.admin1, country].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
 }
 
-export function PlaceSearch({ location, onChange, prefetch }: {
+export function PlaceSearch({ location, onChange, prefetch, countryIndex }: {
   location: LocationChoice | null;
   onChange: (choice: LocationChoice) => void;
   prefetch: boolean;
+  countryIndex?: SearchIndex;
 }) {
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState<SearchIndex | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [results, setResults] = useState<PlaceResult[]>([]);
+  // The query the current results belong to; until it catches up, a search is still pending.
+  const [resultsQuery, setResultsQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [composing, setComposing] = useState(false);
@@ -54,13 +57,16 @@ export function PlaceSearch({ location, onChange, prefetch }: {
   }, [location]);
 
   useEffect(() => {
+    setResults([]);
+    setActive(-1);
     if (composing) return;
     const timer = window.setTimeout(() => {
-      setResults(search(index ?? emptyIndex, query));
+      setResults(search(countryIndex ? [countryIndex, index ?? emptyIndex] : index ?? emptyIndex, query));
+      setResultsQuery(query);
       setActive(-1);
     }, 100);
     return () => window.clearTimeout(timer);
-  }, [query, index, composing]);
+  }, [query, index, countryIndex, composing]);
 
   useEffect(() => {
     if (open && active >= 0) list.current?.children[active]?.scrollIntoView({ block: 'nearest' });
@@ -78,7 +84,9 @@ export function PlaceSearch({ location, onChange, prefetch }: {
   const showResults = open && (query.trim() !== '' || status === 'loading' || status === 'error');
   const statusText = status === 'loading' ? strings.geoLoading
     : status === 'error' ? strings.geoFailed
-    : results.length ? strings.resultsCount(results.length) : strings.noResults;
+    : results.length ? strings.resultsCount(results.length)
+    : resultsQuery !== query ? ''
+    : /^[a-z0-9]$/iu.test(query.trim()) ? strings.typeMore : strings.noResults;
 
   return <div className="place-search" onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
@@ -114,7 +122,7 @@ export function PlaceSearch({ location, onChange, prefetch }: {
       }} />
     <p id={`${id}-hint`} className="muted search-hint">{strings.coordinateHint}</p>
     {showResults && <div className="search-results">
-      <p role="status" className={results.length && status === 'ready' ? 'sr-only' : 'search-message'}>{statusText}</p>
+      {statusText && <p role="status" className={results.length && status === 'ready' ? 'sr-only' : 'search-message'}>{statusText}</p>}
       {status === 'error' && <button type="button" className="secondary retry-search"
         onClick={() => { input.current?.focus(); ensureLoaded(true); }}>{strings.retry}</button>}
       <ul ref={list} id={listId} role="listbox" aria-label={strings.resultsLabel}>

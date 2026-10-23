@@ -4,6 +4,7 @@ import { basename, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { normalize } from '../src/search/normalize.ts';
 
 const LANDMARK_CODES = new Set('MUS CSTL MNMT TOWR LTHSE RUIN TMPL PAL HSTS ANS BDG STDM ZOO PYR MT PK VLC CNYN ISL LK FLLS GLCR PRK RESN'.split(' '));
 const CITY_CENTRES = new Set(['PPLC', 'PPLA', 'PPLG']);
@@ -80,16 +81,20 @@ function addAlternate(summary, alternate, primaryLanguage) {
   }
 }
 
+/** Aliases that normalize alike (Montréal/Montreal, Tōkyō/Tokyo, 東京/东京) add bytes but never a new match. */
+export function uniqueByNormalized(names, taken) {
+  const keys = new Set(taken.filter(Boolean).map(normalize));
+  return names.filter(name => {
+    const key = name ? normalize(name) : '';
+    if (!key || keys.has(key)) return false;
+    keys.add(key);
+    return true;
+  });
+}
+
 function namesFromSummary(feature, summary) {
   const zh = summary?.zh ?? '';
-  const seen = new Set([feature.name, zh, '']);
-  const alt = [];
-  for (const name of [feature.ascii, ...(summary?.buckets.flat() ?? [])]) {
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    alt.push(name);
-    if (alt.length === 10) break;
-  }
+  const alt = uniqueByNormalized([feature.ascii, ...(summary?.buckets.flat() ?? [])], [feature.name, zh]).slice(0, 10);
   return { name: feature.name, zh, alt };
 }
 
@@ -188,14 +193,9 @@ export function mergeCommunityNames(places, files) {
       const supplement = supplements.get(place.id);
       if (!supplement) return place;
       const zh = supplement.zh ?? place.zh;
-      const seen = new Set([place.name, zh, '']);
       // A displaced GeoNames display name remains searchable as an ordinary alias.
       const regular = [place.zh, ...place.alt].filter(name => name && name !== zh && name !== place.name).slice(0, 10);
-      const alt = [...supplement.alt, ...regular].filter(name => {
-        if (seen.has(name)) return false;
-        seen.add(name);
-        return true;
-      });
+      const alt = uniqueByNormalized([...supplement.alt, ...regular], [place.name, zh]);
       return { ...place, zh, alt };
     }), stats,
   };

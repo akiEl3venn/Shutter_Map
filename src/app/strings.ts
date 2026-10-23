@@ -34,15 +34,37 @@ export const strings = {
   geoFailed: '地名数据加载失败',
   retry: '重试',
   noResults: '没有找到，换个写法试试',
+  typeMore: '再输入一个字',
   resultsLabel: '地点搜索结果',
   resultsCount: (count: number) => `${count} 条结果，可用上下键选择，回车确认。`,
   city: '城市',
   landmark: '地标',
+  browseRegions: '按地区浏览',
+  continent: '大陆',
+  country: '国家',
+  admin1: '州/省',
+  allContinents: '全部大陆（可选）',
+  chooseCountry: '选择国家',
+  chooseAdmin1: '选择州/省',
+  chooseCity: '选择城市（可选）',
+  chooseLandmark: '选择地标',
+  countryRequired: '先选择国家',
+  admin1Required: '先选择州/省',
+  otherRegion: '其他（跨区域或未标注）',
+  regionLoading: '正在加载…',
+  regionFailed: '地区数据加载失败',
+  noRegionOptions: '没有匹配的选项',
+  clearRegion: (label: string) => `清除${label}`,
+  remainingRegionOptions: (count: number) => `还有 ${count} 项，继续输入以缩小范围`,
   locationNote: '拍摄位置不一定是照片主体的位置。',
   sessionNote: '刷新页面后，照片与位置会清空。',
   unsupportedFormat: '浏览器无法解码这张照片：格式不受支持或文件已损坏。请转换为 JPEG 或 PNG 后再试。',
   loadFailed: '照片读取失败，请重试或选择另一张照片。',
 } as const;
+
+export const continentNames: Record<string, string> = {
+  AS: '亚洲', EU: '欧洲', NA: '北美洲', SA: '南美洲', AF: '非洲', OC: '大洋洲', AN: '南极洲',
+};
 
 export const featureNames: Record<string, string> = {
   MUS: '博物馆', CSTL: '城堡', MNMT: '纪念碑', TOWR: '塔', LTHSE: '灯塔',

@@ -6,6 +6,13 @@ import { readExif } from '../photo/exif.ts';
 import { loadPhoto } from '../photo/loadPhoto.ts';
 import { strings } from './strings.ts';
 import { PlaceSearch } from './PlaceSearch.tsx';
+import { RegionCascade } from './RegionCascade.tsx';
+import type { RegionLoadStatus } from './RegionCascade.tsx';
+import { loadCountries, loadCountry } from '../search/geoData.ts';
+import { pathForPlace } from '../search/cascade.ts';
+import type { CountrySummary, RegionSelection } from '../search/cascade.ts';
+import { prepareIndexInChunks } from '../search/match.ts';
+import type { CountryData, SearchIndex } from '../search/match.ts';
 
 function PhotoCanvas({ preview }: { preview: ImageBitmap | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,6 +52,14 @@ function PhotoCanvas({ preview }: { preview: ImageBitmap | null }) {
 export function App() {
   const [photo, setPhoto] = useState<PhotoSession | null>(null);
   const [location, setLocation] = useState<LocationChoice | null>(null);
+  const [region, setRegion] = useState<RegionSelection>({});
+  const [countries, setCountries] = useState<CountrySummary[]>([]);
+  const [countriesStatus, setCountriesStatus] = useState<RegionLoadStatus>('loading');
+  const [countriesRetry, setCountriesRetry] = useState(0);
+  const [loadedCountries, setLoadedCountries] = useState<Record<string, { data: CountryData; index: SearchIndex }>>({});
+  const [countryRequest, setCountryRequest] = useState<{ code?: string; status: RegionLoadStatus }>({ status: 'idle' });
+  const [countryRetry, setCountryRetry] = useState(0);
+  const [pendingPlace, setPendingPlace] = useState<{ country: string; id: number } | null>(null);
   const [orientation, setOrientation] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +72,67 @@ export function App() {
   // Release a bitmap only after React has committed its replacement, so no draw can see it closed.
   useEffect(() => () => preview?.close(), [preview]);
   useEffect(() => () => { requestId.current += 1; }, []);
+
+  const selectedCountry = region.country ? loadedCountries[region.country] : undefined;
+  const countryStatus: RegionLoadStatus = !region.country ? 'idle' : selectedCountry ? 'ready'
+    : countryRequest.code === region.country && countryRequest.status === 'error' ? 'error' : 'loading';
+
+  useEffect(() => {
+    let cancelled = false;
+    setCountriesStatus('loading');
+    void loadCountries().then(value => {
+      if (cancelled) return;
+      setCountries(value);
+      setCountriesStatus('ready');
+    }, () => { if (!cancelled) setCountriesStatus('error'); });
+    return () => { cancelled = true; };
+  }, [countriesRetry]);
+
+  useEffect(() => {
+    const code = region.country;
+    if (!code || selectedCountry) return;
+    let cancelled = false;
+    setCountryRequest({ code, status: 'loading' });
+    void loadCountry(code).then(async data => {
+      if (cancelled) return;
+      const index = await prepareIndexInChunks(data);
+      if (cancelled) return;
+      setLoadedCountries(current => ({ ...current, [code]: { data, index } }));
+    }, () => { if (!cancelled) setCountryRequest({ code, status: 'error' }); });
+    return () => { cancelled = true; };
+  }, [region.country, selectedCountry, countryRetry]);
+
+  useEffect(() => {
+    if (!pendingPlace || !selectedCountry || countriesStatus !== 'ready') return;
+    const path = pathForPlace(selectedCountry.data, pendingPlace.id);
+    const continent = countries.find(country => country.code === pendingPlace.country)?.continent;
+    setRegion(current => {
+      if (current.country !== pendingPlace.country) return current;
+      const next = { continent, country: pendingPlace.country, ...path };
+      return current.continent === next.continent && current.admin1 === next.admin1
+        && current.cityId === next.cityId && current.landmarkId === next.landmarkId ? current : next;
+    });
+    setPendingPlace(null);
+  }, [pendingPlace, selectedCountry, countries, countriesStatus]);
+
+  function chooseLocation(choice: LocationChoice) {
+    setLocation(choice);
+    const place = choice.source === 'search' ? choice.place : undefined;
+    if (place?.id !== undefined && place.countryCode) {
+      const country = place.countryCode;
+      const cached = loadedCountries[country];
+      setRegion(current => {
+        if (current.country === country && (place.kind === 'city'
+          ? current.cityId === place.id && !current.landmarkId : current.landmarkId === place.id)) return current;
+        return { continent: countries.find(item => item.code === country)?.continent, country,
+          ...(cached ? pathForPlace(cached.data, place.id!) : null) };
+      });
+      setPendingPlace({ country, id: place.id });
+    } else {
+      setPendingPlace(null);
+      setRegion(current => ({ continent: current.continent, country: current.country, admin1: current.admin1 }));
+    }
+  }
 
   async function selectPhoto(file: File) {
     const id = ++requestId.current;
@@ -76,8 +152,8 @@ export function App() {
         orientedHeightPx: decoded.orientedHeightPx,
         exifLocation,
       });
-      setLocation(current => exifLocation ? { coordinate: exifLocation, source: 'exif' }
-        : current?.source === 'exif' ? null : current);
+      if (exifLocation) chooseLocation({ coordinate: exifLocation, source: 'exif' });
+      else setLocation(current => current?.source === 'exif' ? null : current);
       setOrientation(exif.orientation);
     } catch (failure) {
       if (id !== requestId.current) return;
@@ -150,8 +226,20 @@ export function App() {
           </section>
           <section>
             <h2>{strings.location}</h2>
-            <PlaceSearch location={location} onChange={setLocation}
-              prefetch={photo !== null && photo.exifLocation === null} />
+            <PlaceSearch location={location} onChange={chooseLocation}
+              countryIndex={selectedCountry?.index} prefetch={photo !== null && photo.exifLocation === null} />
+            <RegionCascade countries={countries} country={selectedCountry?.data} region={region}
+              countriesStatus={countriesStatus} countryStatus={countryStatus}
+              onChange={(next, place) => {
+                // Explicit menu changes cancel any older search backfill, including in-flight loads.
+                setPendingPlace(null);
+                setRegion(next);
+                if (place) setLocation({ source: 'search', coordinate: place.coordinate, place });
+              }}
+              onRetry={() => {
+                if (countriesStatus === 'error') setCountriesRetry(value => value + 1);
+                if (countryStatus === 'error') setCountryRetry(value => value + 1);
+              }} />
             {location ? <>
               <p className="source-label">{location.source === 'exif' ? strings.exifSource
                 : location.source === 'search' ? strings.searchSource(location.place?.name ?? '')
@@ -161,7 +249,7 @@ export function App() {
               <p className="location-note">{strings.locationNote}</p>
             </> : <p>{strings.noLocation}</p>}
             {canRestore && <button type="button" className="secondary restore-location"
-              onClick={() => setLocation({ coordinate: photo.exifLocation!, source: 'exif' })}>
+              onClick={() => chooseLocation({ coordinate: photo.exifLocation!, source: 'exif' })}>
               {strings.restorePhotoLocation}
             </button>}
             <p className="muted geo-attribution">{strings.geoAttribution}</p>
