@@ -59,9 +59,17 @@ export function admin1Options(country: CountryData): Option[] {
   return options;
 }
 
-function placesInRegion(country: CountryData, admin1: string): PlaceTuple[] {
+/** Places in one province, or in the whole country when none is chosen yet. */
+function placesInRegion(country: CountryData, admin1?: string): PlaceTuple[] {
+  if (admin1 === undefined) return country.places;
   const known = new Set(country.admin1.map(([code]) => code));
   return country.places.filter((place) => admin1 === otherRegion ? !known.has(place[7]) : place[7] === admin1);
+}
+
+/** Province label per place, shown while a list spans the whole country. */
+function regionLabeller(country: CountryData): (place: PlaceTuple) => string {
+  const labels = new Map(country.admin1.map(([code, name, zh]) => [code, zh ? foldCjk(zh) : name]));
+  return (place) => labels.get(place[7]) ?? strings.otherRegion;
 }
 
 function placeOption(tuple: PlaceTuple): Option {
@@ -72,9 +80,15 @@ function placeOption(tuple: PlaceTuple): Option {
   };
 }
 
-export function cityOptions(country: CountryData, admin1: string): Option[] {
-  const options = placesInRegion(country, admin1).filter((place) => place[5] === 'city')
-    .sort((left, right) => right[8] - left[8]).map(placeOption);
+/** Without a province, lists every city of the country and names each one's province. */
+export function cityOptions(country: CountryData, admin1?: string): Option[] {
+  const places = placesInRegion(country, admin1).filter((place) => place[5] === 'city')
+    .sort((left, right) => right[8] - left[8]);
+  if (admin1 === undefined) {
+    const region = regionLabeller(country);
+    return places.map((place) => ({ ...placeOption(place), description: region(place) }));
+  }
+  const options = places.map(placeOption);
   const labelCounts = new Map<string, number>();
   for (const option of options) labelCounts.set(option.label, (labelCounts.get(option.label) ?? 0) + 1);
   return options.map((option) => labelCounts.get(option.label)! > 1 ? {
@@ -83,20 +97,33 @@ export function cityOptions(country: CountryData, admin1: string): Option[] {
   } : option);
 }
 
-export function landmarkOptions(country: CountryData, admin1: string, cityId?: number): Option[] {
+export function landmarkOptions(country: CountryData, admin1?: string, cityId?: number): Option[] {
+  const region = admin1 === undefined && cityId === undefined ? regionLabeller(country) : undefined;
   return placesInRegion(country, admin1)
     .filter((place) => place[5] !== 'city' && (cityId === undefined || place[10] === cityId))
     .sort((left, right) => right[8] - left[8])
-    .map((tuple) => ({ ...placeOption(tuple), description: featureNames[tuple[5]] ?? strings.landmark }));
+    .map((tuple) => {
+      const type = featureNames[tuple[5]] ?? strings.landmark;
+      return { ...placeOption(tuple), description: region ? `${type} · ${region(tuple)}` : type };
+    });
+}
+
+// Normalized keywords per option, computed once: whole-country lists reach thousands of options.
+const haystacks = new WeakMap<Option, string>();
+function haystackOf(option: Option): string {
+  let haystack = haystacks.get(option);
+  if (haystack === undefined) {
+    haystack = option.keywords.map(normalize).join('\n');
+    haystacks.set(option, haystack);
+  }
+  return haystack;
 }
 
 export function filterOptions(options: Option[], query: string, limit = 200): {
   options: Option[]; truncated: boolean; remaining: number;
 } {
   const normalized = normalize(query);
-  const matches = normalized
-    ? options.filter((option) => option.keywords.some((keyword) => normalize(keyword).includes(normalized)))
-    : options;
+  const matches = normalized ? options.filter((option) => haystackOf(option).includes(normalized)) : options;
   const count = Math.max(0, Math.floor(limit));
   return {
     options: matches.slice(0, count),

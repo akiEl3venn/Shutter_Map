@@ -60,7 +60,6 @@ export function App() {
   const [countryRequest, setCountryRequest] = useState<{ code?: string; status: RegionLoadStatus }>({ status: 'idle' });
   const [countryRetry, setCountryRetry] = useState(0);
   const [pendingPlace, setPendingPlace] = useState<{ country: string; id: number } | null>(null);
-  const [orientation, setOrientation] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string>(strings.loading);
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +159,6 @@ export function App() {
       });
       if (exifLocation) chooseLocation({ coordinate: exifLocation, source: 'exif' });
       else setLocation(current => current?.source === 'exif' ? null : current);
-      setOrientation(exif.orientation);
     } catch (failure) {
       if (id !== requestId.current) return;
       const code = typeof failure === 'object' && failure !== null && 'code' in failure ? failure.code : null;
@@ -226,7 +224,6 @@ export function App() {
             {photo ? <>
               <dl><dt>{strings.sourceDimensions}</dt>
                 <dd className="dimensions">{strings.dimensions(photo.orientedWidthPx, photo.orientedHeightPx)}</dd>
-                <dt>{strings.orientation}</dt><dd>{orientation ?? strings.noOrientation}</dd>
               </dl>
               <button type="button" className="secondary" onClick={() => inputRef.current?.click()}>{strings.replacePhoto}</button>
             </> : <p className="muted">{strings.noPhotoInformation}</p>}
@@ -243,6 +240,7 @@ export function App() {
                 setRegion(next);
                 if (place) setLocation({ source: 'search', coordinate: place.coordinate, place });
               }}
+              onPickPlace={place => chooseLocation({ coordinate: place.coordinate, source: 'search', place })}
               onRetry={() => {
                 if (countriesStatus === 'error') setCountriesRetry(value => value + 1);
                 if (countryStatus === 'error') setCountryRetry(value => value + 1);

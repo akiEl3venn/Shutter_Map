@@ -3,7 +3,8 @@ import { filterOptions } from '../search/cascade.ts';
 import type { Option } from '../search/cascade.ts';
 import { strings } from './strings.ts';
 
-export function FilterCombobox({ label, options, value, onChange, disabled = false, placeholder, loading = false }: {
+export function FilterCombobox({ label, options, value, onChange, disabled = false, placeholder, loading = false,
+  search, emptyText, onOpen }: {
   label: string;
   options: Option[];
   value: string | null;
@@ -11,6 +12,10 @@ export function FilterCombobox({ label, options, value, onChange, disabled = fal
   disabled?: boolean;
   placeholder?: string;
   loading?: boolean;
+  /** Replaces local filtering, e.g. a global city search; `options` then only labels the current value. */
+  search?: (query: string) => Option[];
+  emptyText?: (query: string) => string;
+  onOpen?: () => void;
 }) {
   const selectedLabel = options.find(option => option.value === value)?.label ?? '';
   const [draft, setDraft] = useState(selectedLabel);
@@ -24,7 +29,9 @@ export function FilterCombobox({ label, options, value, onChange, disabled = fal
   const listId = `${id}-options`;
   const unavailable = disabled || loading;
   const expanded = open && !unavailable;
-  const filtered = useMemo(() => filterOptions(options, open ? query : ''), [options, query, open]);
+  const filtered = useMemo(() => search
+    ? { options: open ? search(query) : [], truncated: false, remaining: 0 }
+    : filterOptions(options, open ? query : ''), [options, query, open, search]);
 
   useEffect(() => {
     setDraft(selectedLabel);
@@ -43,6 +50,7 @@ export function FilterCombobox({ label, options, value, onChange, disabled = fal
     setQuery('');
     setOpen(true);
     setActive(-1);
+    onOpen?.();
   }
 
   function restore() {
@@ -113,7 +121,9 @@ export function FilterCombobox({ label, options, value, onChange, disabled = fal
         }}>×</button>}
     </div>
     {expanded && <div className="filter-options">
-      {!filtered.options.length && <p role="status" className="filter-options-footer">{strings.noRegionOptions}</p>}
+      {!filtered.options.length && <p role="status" className="filter-options-footer">
+        {emptyText ? emptyText(query) : strings.noRegionOptions}
+      </p>}
       <ul ref={list} id={listId} role="listbox" aria-label={label}>
         {filtered.options.map((option, position) => <li key={option.value} id={`${id}-option-${position}`}
           role="option" aria-selected={active >= 0 ? active === position : value === option.value}

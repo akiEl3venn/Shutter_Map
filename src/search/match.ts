@@ -138,17 +138,20 @@ function forEachPlace(indexes: SearchIndex[], visit: (place: IndexedPlace) => vo
   });
 }
 
-export function search(index: SearchIndex | SearchIndex[], query: string, limit = 10): PlaceResult[] {
+/** `accept` narrows results by kind, e.g. the region menu's city field asks for cities only. */
+export function search(index: SearchIndex | SearchIndex[], query: string, limit = 10,
+  accept: (result: PlaceResult) => boolean = () => true): PlaceResult[] {
   const count = Math.max(0, Math.floor(limit));
   if (!count) return [];
   const normalized = normalize(query);
   if (!normalized) return [];
   const parsed = parseCoordinates(query);
-  const coordinateResults: PlaceResult[] = parsed.ok ? [{
+  const coordinate: PlaceResult | null = parsed.ok ? {
     kind: 'coordinate',
     name: `使用坐标 ${parsed.value[1].toFixed(6)}, ${parsed.value[0].toFixed(6)}`,
     coordinate: parsed.value,
-  }] : [];
+  } : null;
+  const coordinateResults = coordinate && accept(coordinate) ? [coordinate] : [];
   // A lone Latin letter or digit matches most of the index (~90 ms globally) and says nothing; one Han character can.
   if (/^[a-z0-9]$/u.test(normalized)) return coordinateResults;
   const queryWords = normalized.split(' ');
@@ -156,6 +159,7 @@ export function search(index: SearchIndex | SearchIndex[], query: string, limit 
   const hits: Hit[] = [];
   const matched = new Set<IndexedPlace>();
   forEachPlace(indexes, (place) => {
+    if (!accept(place.result)) return;
     // Every tier needs each query word somewhere in the names; one native scan rejects most places.
     for (const word of queryWords) if (!place.haystack.includes(word)) return;
     let best: Hit | undefined;
@@ -173,7 +177,7 @@ export function search(index: SearchIndex | SearchIndex[], query: string, limit 
     const head = normalized.slice(0, width);
     const tail = normalized.slice(-width);
     forEachPlace(indexes, (place) => {
-      if (matched.has(place) || !(place.haystack.includes(head) || place.haystack.includes(tail))) return;
+      if (matched.has(place) || !accept(place.result) || !(place.haystack.includes(head) || place.haystack.includes(tail))) return;
       const name = place.names.find((candidate) => candidate.words.some((word) =>
         Math.abs(word.length - normalized.length) <= 1 && withinOneEdit(word, normalized)));
       if (name) hits.push({ place, name, score: 1 });
