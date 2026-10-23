@@ -5,9 +5,10 @@ export const strings = {
   selectPhoto: '选择照片',
   replacePhoto: '更换照片',
   dropHint: '或将照片拖到这里',
-  formatHint: '支持 JPEG、PNG、WebP、AVIF；Safari 还支持 HEIC。一次读取一张照片。',
+  formatHint: '支持 JPEG、PNG、WebP、AVIF、HEIC、TIFF、JPEG XL、GIF、BMP。一次读取一张照片。',
   dropToReplace: '松开以读取照片',
   loading: '正在读取照片…',
+  decoding: (format: string) => `正在解码 ${format === 'jxl' ? 'JPEG XL' : format.toUpperCase()}…（首次需要下载解码器）`,
   loaded: '照片已就绪',
   waiting: '等待选择照片',
   previewLabel: '照片预览',
@@ -59,6 +60,7 @@ export const strings = {
   locationNote: '拍摄位置不一定是照片主体的位置。',
   sessionNote: '刷新页面后，照片与位置会清空。',
   unsupportedFormat: '浏览器无法解码这张照片：格式不受支持或文件已损坏。请转换为 JPEG 或 PNG 后再试。',
+  rawUnsupported: '暂不支持 RAW 文件，请先导出为 JPEG、TIFF 或 HEIC 等格式再试。',
   loadFailed: '照片读取失败，请重试或选择另一张照片。',
 } as const;
 

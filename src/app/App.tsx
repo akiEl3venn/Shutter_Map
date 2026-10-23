@@ -62,6 +62,7 @@ export function App() {
   const [pendingPlace, setPendingPlace] = useState<{ country: string; id: number } | null>(null);
   const [orientation, setOrientation] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>(strings.loading);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<ImageBitmap | null>(null);
@@ -137,9 +138,14 @@ export function App() {
   async function selectPhoto(file: File) {
     const id = ++requestId.current;
     setLoading(true);
+    setLoadingMessage(strings.loading);
     setError(null);
     try {
-      const [exif, decoded] = await Promise.all([readExif(file), loadPhoto(file)]);
+      const exif = await readExif(file);
+      if (id !== requestId.current) return;
+      const decoded = await loadPhoto(file, exif.orientation, format => {
+        if (id === requestId.current) setLoadingMessage(strings.decoding(format));
+      });
       if (id !== requestId.current) {
         decoded.preview.close();
         return;
@@ -157,9 +163,9 @@ export function App() {
       setOrientation(exif.orientation);
     } catch (failure) {
       if (id !== requestId.current) return;
-      const unsupported = typeof failure === 'object' && failure !== null
-        && 'code' in failure && failure.code === 'unsupported-format';
-      setError(unsupported ? strings.unsupportedFormat : strings.loadFailed);
+      const code = typeof failure === 'object' && failure !== null && 'code' in failure ? failure.code : null;
+      setError(code === 'raw-unsupported' ? strings.rawUnsupported
+        : code === 'unsupported-format' ? strings.unsupportedFormat : strings.loadFailed);
     } finally {
       if (id === requestId.current) setLoading(false);
     }
@@ -198,7 +204,8 @@ export function App() {
         <div><h1>{strings.title}</h1><p>{strings.introduction}</p></div>
         <p className="privacy-note">{strings.localOnly}</p>
       </header>
-      <input ref={inputRef} className="file-input" type="file" accept="image/*" tabIndex={-1}
+      <input ref={inputRef} className="file-input" type="file"
+        accept="image/*,.jpg,.jpeg,.jfif,.png,.gif,.bmp,.webp,.avif,.heic,.heif,.hif,.tif,.tiff,.jxl" tabIndex={-1}
         aria-label={strings.selectPhoto}
         onChange={event => {
           const file = event.currentTarget.files?.[0];
@@ -255,7 +262,7 @@ export function App() {
             <p className="muted geo-attribution">{strings.geoAttribution}</p>
           </section>
           <div className="status-area">
-            <p className="status" role="status">{loading ? strings.loading : error ? '' : photo ? strings.loaded : strings.waiting}</p>
+            <p className="status" role="status">{loading ? loadingMessage : error ? '' : photo ? strings.loaded : strings.waiting}</p>
             {error && <p className="error" role="alert">{error}</p>}
             <p className="muted">{strings.sessionNote}</p>
           </div>
