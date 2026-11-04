@@ -57,6 +57,7 @@ export function tupleToPlaceResult(tuple: PlaceTuple, regions: Admin1Map): Place
   return {
     id,
     name: zh ? foldCjk(zh) : name,
+    ...(zh ? { englishName: name } : {}),
     kind: kind === 'city' ? 'city' : 'landmark',
     ...(kind === 'city' ? {} : { featureCode: kind }),
     coordinate: [lon, lat],

@@ -1,8 +1,8 @@
 import type { MapComposition } from '../contracts.ts';
 import type { TileFeatures } from './decodeTile.ts';
-import { rasterSize, tileTransform } from './layerGeometry.ts';
-import { isAreaName, labelStyle, layoutLabels, selectLabelName, type LabelCandidate } from './labels.ts';
-import { circleFeather, fadeBand, fadeStops, haloFor, landmarkColor, layerLook, lineWidths, sideFeather } from './style.ts';
+import { projectToLayer, rasterSize, tileTransform } from './layerGeometry.ts';
+import { isAreaName, labelStyle, layoutLabels, markFocus, selectLabelName, type LabelCandidate } from './labels.ts';
+import { circleFeather, fadeBand, fadeStops, focusColor, haloFor, layerLook, lineWidths, sideFeather } from './style.ts';
 import { thinRoads } from './thinRoads.ts';
 
 const strokeOrder = ['water', 'hiking', 'all', 'standard', 'major'] as const;
@@ -64,10 +64,18 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
       candidates.push({
         name: selectLabelName(place, composition.labels.language),
         kind: place.kind, rank: place.rank, x: left + s * place.x, y: top + s * place.y,
+        aliases: [place.name, ...Object.values(place.names)],
       });
     }
   }
-  const labels = layoutLabels(candidates, {
+  const { focus, language } = composition.labels;
+  let marked = candidates;
+  if (focus) {
+    const [x, y] = projectToLayer(focus.coordinate, composition);
+    marked = markFocus(candidates, { x, y, metersPerPx: composition.metersPerImagePixel, name: focus.name,
+      englishName: focus.englishName, label: language === 'en' ? focus.englishName : focus.name });
+  }
+  const labels = layoutLabels(marked, {
     widthPx: composition.widthPx, heightPx: composition.heightPx, scalePx: composition.scalePx,
     rotationDegrees: composition.rotationDegrees, maxCount: composition.labels.maxCount,
     ...(composition.shape === 'circle' ? { shape: composition.shape, feather: circleFeather(composition) }
@@ -89,7 +97,7 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
   ctx.lineWidth = labelStyle.halo * u;
   ctx.lineJoin = 'round';
   for (const label of labels) {
-    const color = label.kind === 'landmark' ? landmarkColor : lineColor;
+    const color = label.focus ? focusColor : lineColor;
     ctx.strokeStyle = haloFor(color);
     ctx.fillStyle = color;
     if (label.marker) {

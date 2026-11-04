@@ -1,9 +1,10 @@
 import { useLayoutEffect, useReducer } from 'react';
-import type { LocationChoice, LonLat, PhotoSession } from '../contracts.ts';
+import type { LocationChoice, LonLat, MapFocus, PhotoSession } from '../contracts.ts';
 import { createEditorState, editComposition, type EditAction, type EditorState } from '../map/editComposition.ts';
+import { focusFor } from '../map/labels.ts';
 
 type Session = { photo: PhotoSession | null; editor: EditorState | null };
-type Sync = { type: 'sync'; photo: PhotoSession | null; coordinate: LonLat | null };
+type Sync = { type: 'sync'; photo: PhotoSession | null; coordinate: LonLat | null; focus: MapFocus | null };
 
 function reduce(session: Session, action: EditAction | Sync): Session {
   const photo = action.type === 'sync' ? action.photo : session.photo;
@@ -11,10 +12,12 @@ function reduce(session: Session, action: EditAction | Sync): Session {
   const size = { widthPx: photo.orientedWidthPx, heightPx: photo.orientedHeightPx };
   if (action.type === 'sync') {
     const point = action.coordinate!;
-    if (photo !== session.photo || !session.editor) return { photo, editor: createEditorState(size, point) };
-    const [lon, lat] = session.editor.composition.geographicCenter;
-    if (point[0] === lon && point[1] === lat) return session;
-    return { photo, editor: editComposition(session.editor, { type: 'geographicCenter', value: point }, size) };
+    if (photo !== session.photo || !session.editor) return { photo, editor: createEditorState(size, point, action.focus) };
+    const { geographicCenter: [lon, lat], labels: { focus } } = session.editor.composition;
+    const sameFocus = JSON.stringify(focus) === JSON.stringify(action.focus);
+    if (point[0] === lon && point[1] === lat && sameFocus) return session;
+    const moved = editComposition(session.editor, { type: 'geographicCenter', value: point }, size);
+    return { photo, editor: editComposition(moved, { type: 'focus', value: action.focus }, size) };
   }
   return session.editor ? { photo, editor: editComposition(session.editor, action, size) } : session;
 }
@@ -22,8 +25,10 @@ function reduce(session: Session, action: EditAction | Sync): Session {
 export function useComposition(photo: PhotoSession | null, location: LocationChoice | null) {
   const [session, edit] = useReducer(reduce, { photo: null, editor: null });
   const lon = location?.coordinate[0], lat = location?.coordinate[1];
+  const focus = focusFor(location);
+  const focusKey = JSON.stringify(focus);
   useLayoutEffect(() => {
-    edit({ type: 'sync', photo, coordinate: lon === undefined || lat === undefined ? null : [lon, lat] });
-  }, [photo, lon, lat]);
+    edit({ type: 'sync', photo, coordinate: lon === undefined || lat === undefined ? null : [lon, lat], focus });
+  }, [photo, lon, lat, focusKey]);
   return { editor: photo === session.photo && location ? session.editor : null, edit };
 }

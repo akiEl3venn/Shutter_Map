@@ -16,6 +16,7 @@ import type { CountryData, SearchIndex } from '../search/match.ts';
 import { PhotoCanvas, type DragMode } from './PhotoCanvas.tsx';
 import { EditPanel } from './EditPanel.tsx';
 import { useComposition } from './useComposition.ts';
+import { focusFor } from '../map/labels.ts';
 import { useMapPreview } from './useMapPreview.ts';
 import { exportFormats, type ExportFormat } from '../export/formats.ts';
 import { useExport } from './useExport.ts';
@@ -237,7 +238,7 @@ export function App() {
         <div className="stage">
           <section className="preview-area" aria-label={strings.previewLabel}>
             <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} composition={composition} mode={dragMode}
-              edit={edit} choosePoint={coordinate => chooseLocation({ source: 'coordinate', coordinate })} />
+              edit={edit} choosePoint={coordinate => chooseLocation({ source: 'coordinate', coordinate, focus: focusFor(location) })} />
             {!photo && <div className="empty-preview">
               <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
               <p>{strings.dropHint}</p><p className="muted">{strings.formatHint}</p>

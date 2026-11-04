@@ -1,4 +1,4 @@
-import type { DetailOffset, LabelLanguage, LayerId, LonLat, MapComposition } from '../contracts.ts';
+import type { DetailOffset, LabelLanguage, LayerId, LonLat, MapComposition, MapFocus } from '../contracts.ts';
 import { defaultComposition, MIN_LAYER_PX } from './composition.ts';
 import { layerExtent, rasterSize } from './layerGeometry.ts';
 import { lonLatToWorld, metersPerWorldUnit, worldToLonLat } from './mercator.ts';
@@ -19,6 +19,7 @@ export type EditAction =
   | { type: 'center' | 'margin'; value: Point }
   | { type: 'anchor'; value: Anchor }
   | { type: 'geographicCenter'; value: LonLat }
+  | { type: 'focus'; value: MapFocus | null }
   | { type: 'size' | 'width' | 'height' | 'rotation' | 'range' | 'circleFeather' |
       'lineScale' | 'opacity' | 'maxCount'; value: number }
   | { type: 'shape'; value: MapComposition['shape'] }
@@ -37,10 +38,11 @@ export const MIN_RANGE_KM = 0.5, MAX_RANGE_KM = 500;
 const MAX_LABELS = 20;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-export function createEditorState(photo: PhotoSize, coordinate: LonLat): EditorState {
-  const composition = defaultComposition(
+export function createEditorState(photo: PhotoSize, coordinate: LonLat, focus: MapFocus | null = null): EditorState {
+  const base = defaultComposition(
     { orientedWidthPx: photo.widthPx, orientedHeightPx: photo.heightPx }, { coordinate },
   )!;
+  const composition = { ...base, labels: { ...base.labels, focus } };
   return { composition, anchor: [1, 1], marginPx: [0, 0], rectangleAspect: 1 / 2 };
 }
 
@@ -107,7 +109,7 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     Math.min(max, MAX_RANGE_KM * 1000 / c.metersPerImagePixel)));
 
   switch (action.type) {
-    case 'reset': return createEditorState(photo, c.geographicCenter);
+    case 'reset': return createEditorState(photo, c.geographicCenter, c.labels.focus);
     case 'center': anchor = null; c = { ...c, centerPx: action.value }; break;
     case 'anchor': anchor = action.value; break;
     case 'margin':
@@ -134,6 +136,7 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
       c = { ...c, rotationDegrees: degrees }; break;
     }
     case 'geographicCenter': c = { ...c, geographicCenter: action.value }; break;
+    case 'focus': c = { ...c, labels: { ...c.labels, focus: action.value } }; break;
     case 'range':
       c = { ...c, metersPerImagePixel: clamp(action.value, MIN_RANGE_KM, MAX_RANGE_KM) * 1000 / c.widthPx }; break;
     case 'circleFeather':

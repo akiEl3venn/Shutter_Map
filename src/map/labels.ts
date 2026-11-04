@@ -1,4 +1,4 @@
-import type { MapComposition, PlaceKind } from '../contracts.ts';
+import type { LocationChoice, MapComposition, MapFocus, PlaceKind } from '../contracts.ts';
 import { foldCjk } from '../search/normalize.ts';
 
 type NameLanguage = 'en' | 'zh' | 'ja';
@@ -18,6 +18,52 @@ export interface LabelCandidate {
   x: number;
   y: number;
   rank: number;
+  /** The place's name in every language, to recognize it. */
+  aliases?: string[];
+  /** The one landmark to single out. */
+  focus?: boolean;
+}
+
+/** What the map singles out, if anything: a chosen landmark, or wherever a photo was taken. */
+export function focusFor(choice: LocationChoice | null): MapFocus | null {
+  if (!choice) return null;
+  if (choice.focus !== undefined) return choice.focus;
+  if (choice.source === 'exif') return { coordinate: choice.coordinate };
+  if (choice.source === 'search' && choice.place?.kind === 'landmark') {
+    const { name, englishName } = choice.place;
+    return { coordinate: choice.coordinate, name, ...(englishName ? { englishName } : {}) };
+  }
+  return null;
+}
+
+/** Search data and map labels come from different sources, so the same place can sit a little apart. */
+const SAME_PLACE_METERS = 1000;
+/** A photo is of a landmark only when taken right beside it. Further out, a guess would mark the wrong one. */
+const PHOTOGRAPHED_METERS = 300;
+const nameKey = (name: string) => foldCjk(name).toLowerCase();
+
+/**
+ * Marks the one candidate the map is about. A named focus that the map's labels do not include still gets a label of
+ * its own, because the person asked for that place. An unnamed one marks the nearest landmark, or nothing.
+ */
+export function markFocus(candidates: LabelCandidate[], focus: { x: number; y: number; metersPerPx: number;
+  name?: string; label?: string; englishName?: string; }): LabelCandidate[] {
+  const wanted = [focus.name, focus.englishName].filter(name => name !== undefined).map(nameKey);
+  const reach = (focus.name ? SAME_PLACE_METERS : PHOTOGRAPHED_METERS) / focus.metersPerPx;
+  let match: LabelCandidate | undefined;
+  let nearest = reach;
+  for (const candidate of candidates) {
+    if (isAreaName(candidate.kind)) continue;
+    if (focus.name && !(candidate.aliases ?? [candidate.name]).some(alias => wanted.includes(nameKey(alias)))) continue;
+    const distance = Math.hypot(candidate.x - focus.x, candidate.y - focus.y);
+    if (distance <= nearest) {
+      match = candidate;
+      nearest = distance;
+    }
+  }
+  if (match) return candidates.map(candidate => candidate === match ? { ...candidate, focus: true } : candidate);
+  if (!focus.name) return candidates;
+  return [...candidates, { kind: 'landmark', name: focus.label ?? focus.name, x: focus.x, y: focus.y, rank: 0, focus: true }];
 }
 
 export interface PlacedLabel extends LabelCandidate {
@@ -70,8 +116,8 @@ export function layoutLabels(candidates: LabelCandidate[], options: Mask & {
   const spacing = labelStyle.spacing * u;
   const occupied: Box[] = [];
   const placed: PlacedLabel[] = [];
-  const sorted = [...candidates].sort((a, b) => priority[a.kind] - priority[b.kind]
-    || b.rank - a.rank || a.name.length - b.name.length);
+  const sorted = [...candidates].sort((a, b) => Number(b.focus ?? false) - Number(a.focus ?? false)
+    || priority[a.kind] - priority[b.kind] || b.rank - a.rank || a.name.length - b.name.length);
 
   for (const point of sorted) {
     if (placed.length >= maxCount) break;

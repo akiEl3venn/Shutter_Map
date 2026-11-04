@@ -34,6 +34,8 @@ export interface Tileset {
 export interface PlaceResult {
   id?: number;
   matchedName?: string;
+  /** Present alongside a Chinese display name, to match and label the place in other languages. */
+  englishName?: string;
   kind: 'city' | 'landmark' | 'coordinate';
   /** GeoNames feature code for landmarks, e.g. 'MUS' or 'PK'. */
   featureCode?: string;
@@ -61,11 +63,20 @@ export interface PhotoSession {
   exifLocation: LonLat | null;
 }
 
+/** The one place a map singles out: the landmark chosen, or whichever stands where the photo was taken (no name). */
+export interface MapFocus {
+  coordinate: LonLat;
+  name?: string;
+  englishName?: string;
+}
+
 export interface LocationChoice {
   coordinate: LonLat;
   source: 'exif' | 'search' | 'coordinate';
   /** Present when the source is search. */
   place?: PlaceResult;
+  /** Carried over when the map is dragged, which changes the center but not what the photo is of. */
+  focus?: MapFocus | null;
 }
 
 export interface MapComposition {
@@ -92,6 +103,7 @@ export interface MapComposition {
     maxCount: number;
     /** Cities, towns and districts. Off by default: named areas crowd the map, while landmarks are what people look for. */
     showAreas: boolean;
+    focus: MapFocus | null;
   };
   feather: {
     circlePx: ImagePixels;
