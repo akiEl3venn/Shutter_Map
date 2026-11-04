@@ -7,7 +7,7 @@ import { classifyRoad } from './roadClass.ts';
 export interface TileFeatures {
   key: TileKey;
   extent: number;
-  roads: { kind: RoadKind; line: number[] }[];
+  roads: { kind: RoadKind; line: number[]; minor?: boolean }[];
   hiking: { line: number[] }[];
   /** Each polygon contains an outer ring followed by its holes. */
   water: { polygons: number[][][]; lines: number[][] };
@@ -22,6 +22,8 @@ export interface TileFeatures {
 }
 
 const excludedRoads = new Set(['rail', 'ferry', 'aerialway', 'aeroway', 'pier']);
+/** Ordinary-road classes that yield first where the map is crowded. */
+const minorRoads = new Set(['service', 'pedestrian', 'living_street', 'track']);
 const landmarks = new Set(['attraction', 'landmark', 'memorial', 'monument', 'museum', 'castle', 'viewpoint', 'lighthouse', 'tower']);
 type Properties = VectorTileFeature['properties'];
 type Point = { x: number; y: number };
@@ -84,6 +86,7 @@ export function decodeTile(bytes: ArrayBuffer, key: TileKey): TileFeatures {
     for (const points of feature.loadGeometry()) {
       const line = flatLine(points, extent / feature.extent);
       if (classification.layer === 'hiking') result.hiking.push({ line });
+      else if (minorRoads.has(String(feature.properties.kind_detail))) result.roads.push({ kind: classification.detail, line, minor: true });
       else result.roads.push({ kind: classification.detail, line });
     }
   });

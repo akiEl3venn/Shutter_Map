@@ -16,7 +16,7 @@ export function defaultComposition(
     geographicCenter: location.coordinate,
     detailOffset: 0,
     visibleLayers: { roads: true, hiking: false, water: true, places: true },
-    labels: { language: 'local', maxCount: 12 },
+    labels: { language: 'local', maxCount: 5 },
     feather: { circlePx: 0, squarePx: [0, 0, 0, 0], rectanglePx: [0, 0, 0, 0] },
   };
 }

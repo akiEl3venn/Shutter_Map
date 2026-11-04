@@ -26,7 +26,9 @@ export interface PlacedLabel extends LabelCandidate {
 }
 
 /** Multiples of u = widthPx / 2400. Sized to stay readable over dense streets once the photo is scaled down. */
-export const labelStyle = { cityFont: 54, townFont: 44, pointFont: 36, markerRadius: 6, halo: 9 };
+export const labelStyle = { cityFont: 54, townFont: 44, pointFont: 36, markerRadius: 6, halo: 9, spacing: 140 };
+/** Labels stay where every road class is still at full strength, inside the fade. */
+const USABLE_RADIUS = 0.66;
 
 type Box = { left: number; right: number; top: number; bottom: number };
 const priority: Record<PlaceKind, number> = { city: 0, town: 1, peak: 2, landmark: 3, village: 4 };
@@ -41,7 +43,8 @@ export function layoutLabels(candidates: LabelCandidate[], options: {
   const markerRadius = labelStyle.markerRadius * u;
   const cx = widthPx / 2;
   const cy = heightPx / 2;
-  const usableRadius = Math.min(cx, cy) - 8 * u;
+  const usableRadius = Math.min(cx, cy) * USABLE_RADIUS;
+  const spacing = labelStyle.spacing * u;
   const occupied: Box[] = [];
   const placed: PlacedLabel[] = [];
   const sorted = [...candidates].sort((a, b) => priority[a.kind] - priority[b.kind]
@@ -67,7 +70,8 @@ export function layoutLabels(candidates: LabelCandidate[], options: {
       const farX = Math.max(Math.abs(cx - box.left), Math.abs(cx - box.right));
       const farY = Math.max(Math.abs(cy - box.top), Math.abs(cy - box.bottom));
       if (Math.hypot(farX, farY) > usableRadius) continue;
-      if (occupied.some(b => box.left < b.right && box.right > b.left && box.top < b.bottom && box.bottom > b.top)) continue;
+      if (occupied.some(b => box.left - spacing < b.right && box.right + spacing > b.left
+        && box.top - spacing < b.bottom && box.bottom + spacing > b.top)) continue;
       placed.push({ ...point, marker, fontPx, textX, textY: y });
       occupied.push(box);
       break;
