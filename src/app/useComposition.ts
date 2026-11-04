@@ -1,6 +1,6 @@
-import { useLayoutEffect, useReducer } from 'react';
+import { useLayoutEffect, useMemo, useReducer } from 'react';
 import type { LocationChoice, LonLat, MapFocus, PhotoSession } from '../contracts.ts';
-import { createEditorState, editComposition, type EditAction, type EditorState } from '../map/editComposition.ts';
+import { createEditorState, drawnComposition, editComposition, type EditAction, type EditorState } from '../map/editComposition.ts';
 import { focusFor } from '../map/labels.ts';
 
 type Session = { photo: PhotoSession | null; editor: EditorState | null };
@@ -30,5 +30,8 @@ export function useComposition(photo: PhotoSession | null, location: LocationCho
   useLayoutEffect(() => {
     edit({ type: 'sync', photo, coordinate: lon === undefined || lat === undefined ? null : [lon, lat], focus });
   }, [photo, lon, lat, focusKey]);
-  return { editor: photo === session.photo && location ? session.editor : null, edit };
+  const editor = photo === session.photo && location ? session.editor : null;
+  const drawn = useMemo(() => editor && photo
+    ? drawnComposition(editor, { widthPx: photo.orientedWidthPx, heightPx: photo.orientedHeightPx }) : null, [editor, photo]);
+  return { editor, drawn, edit };
 }

@@ -95,7 +95,7 @@ export interface MapComposition {
   /** Independent of layer size: one isotropic geographic scale for both axes. */
   metersPerImagePixel: Meters;
   geographicCenter: LonLat;
-  /** Tile zoom derives from source pixels plus this offset, never from the screen. */
+  /** Which roads are drawn and how closely, and how much deeper than the source pixels' zoom to read. Never from the screen. */
   detailOffset: DetailOffset;
   visibleLayers: Record<LayerId, boolean>;
   labels: {
@@ -109,8 +109,6 @@ export interface MapComposition {
     circlePx: ImagePixels;
     squarePx: readonly [top: ImagePixels, right: ImagePixels, bottom: ImagePixels, left: ImagePixels];
     rectanglePx: readonly [top: ImagePixels, right: ImagePixels, bottom: ImagePixels, left: ImagePixels];
-    /** Sides left hard for now, whatever their saved width, because they rest against the photo's own edge. */
-    hardSides: readonly [top: boolean, right: boolean, bottom: boolean, left: boolean];
   };
 }
 

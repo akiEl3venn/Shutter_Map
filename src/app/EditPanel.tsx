@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LayerId, MapComposition, PhotoSession } from '../contracts.ts';
-import { anchoredCenter, MAX_RANGE_KM, MIN_LAYER_PX, MIN_RANGE_KM, type Anchor, type EditAction, type EditorState } from '../map/editComposition.ts';
+import { anchoredCenter, inPhotoCorner, MAX_RANGE_KM, MIN_LAYER_PX, MIN_RANGE_KM, type Anchor, type EditAction, type EditorState } from '../map/editComposition.ts';
 import { circleFeather, sideFeather } from '../map/style.ts';
 import type { DragMode } from './PhotoCanvas.tsx';
 import { scrubbedValue } from './scrub.ts';
@@ -154,10 +154,10 @@ function FeatherSlider({ label, percent, change }: { label: string; percent: num
     display={percent === 0 ? s.featherHard : Math.max(1, Math.round(percent)) + '%'} />;
 }
 
-function Shape({ c, edit }: { c: MapComposition; edit: Edit }) {
+function Shape({ c, drawn, inCorner, edit }: { c: MapComposition; drawn: MapComposition; inCorner: boolean; edit: Edit }) {
   const [linked, setLinked] = useState({ square: true, rectangle: true });
   const half: FourSides = [c.heightPx / 2, c.widthPx / 2, c.heightPx / 2, c.widthPx / 2];
-  const sides = sideFeather(c);
+  const sides = sideFeather(drawn); // A side's slider shows the fade it really has, which a corner can hold back.
   const percent = sides.map((value, i) => value / half[i] * 100);
   const saved = c.shape === 'square' ? c.feather.squarePx : c.feather.rectanglePx;
   // Together, all four edges fade over the same width, measured against the short side.
@@ -178,21 +178,22 @@ function Shape({ c, edit }: { c: MapComposition; edit: Edit }) {
       {together ? <FeatherSlider label={s.feather} percent={percentTogether} change={changeTogether} />
         : featherNames.map((name, i) => <FeatherSlider key={name} label={name} percent={percent[i]}
           change={n => edit({ type: 'sideFeather', side: i as 0 | 1 | 2 | 3, value: half[i] * n / 100 })} />)}
-      {together && c.feather.hardSides.some(Boolean) && <p className="muted">{s.featherCornerNote}</p>}
+      {together && inCorner && <p className="muted">{s.featherCornerNote}</p>}
     </>}
   </Group>;
 }
 
 interface EditPanelProps {
-  state: EditorState; photo: PhotoSession; edit: Edit;
+  state: EditorState; drawn: MapComposition; photo: PhotoSession; edit: Edit;
   mode: DragMode; setMode: (mode: DragMode) => void;
 }
 export function EditPanel(props: EditPanelProps) {
-  const { state: { composition: c }, edit } = props;
+  const { state, drawn, edit } = props;
+  const c = state.composition;
   const [lastColor, setLastColor] = useState<`#${string}`>('#ffffff');
   return <section className="edit-panel" id="edit-panel">
     <Placement {...props} />
-    <Shape c={c} edit={edit} />
+    <Shape c={c} drawn={drawn} inCorner={inPhotoCorner(state)} edit={edit} />
     <Group title={s.editStyle}>
       <Radios<'auto' | 'custom'> title={s.lineColor} value={c.style.color === 'auto' ? 'auto' : 'custom'}
         options={[[ 'auto', s.colorAuto ], [ 'custom', s.colorCustom ]]}

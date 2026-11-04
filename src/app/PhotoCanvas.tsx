@@ -16,11 +16,14 @@ export type DragMode = 'layer' | 'map';
 type Point = readonly [number, number];
 type Drag = { id: number; from: Point; start: MapComposition; mode: DragMode; moved: boolean };
 
-export function PhotoCanvas({ preview, photo, overlay, composition, mode, edit, choosePoint }: {
+export function PhotoCanvas({ preview, photo, overlay, composition, drawn, mode, edit, choosePoint }: {
   preview: ImageBitmap | null;
   photo: PhotoSession | null;
   overlay: Overlay | null;
+  /** What the edits start from. */
   composition: MapComposition | null;
+  /** What is on the photo, which a layer in a corner can reach beyond. */
+  drawn: MapComposition | null;
   mode: DragMode;
   edit: (action: EditAction) => void;
   choosePoint: (point: LonLat) => void;
@@ -30,7 +33,7 @@ export function PhotoCanvas({ preview, photo, overlay, composition, mode, edit, 
   const drag = useRef<Drag | null>(null);
   const [hover, setHover] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const interactive = !!composition && !!photo && overlay?.photo === photo;
+  const interactive = !!composition && !!drawn && !!photo && overlay?.photo === photo;
   useLayoutEffect(() => {
     drag.current = null;
     setDragging(false);
@@ -45,7 +48,7 @@ export function PhotoCanvas({ preview, photo, overlay, composition, mode, edit, 
   }
   function hit(p: Point) {
     return interactive && p[0] >= 0 && p[1] >= 0 && p[0] <= photo!.orientedWidthPx &&
-      p[1] <= photo!.orientedHeightPx && hitsLayer(p, composition!);
+      p[1] <= photo!.orientedHeightPx && hitsLayer(p, drawn!);
   }
   function move(event: PointerEvent<HTMLCanvasElement>, finish = false) {
     if (!interactive) return;
@@ -93,14 +96,14 @@ export function PhotoCanvas({ preview, photo, overlay, composition, mode, edit, 
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(preview, 0, 0, photo.orientedWidthPx, photo.orientedHeightPx);
-      if (overlay?.photo !== photo || !composition) return;
+      if (overlay?.photo !== photo || !drawn) return;
       ctx.save();
       ctx.beginPath();
       ctx.rect(0, 0, photo.orientedWidthPx, photo.orientedHeightPx);
       ctx.clip(); // A layer may cross the photo's edge; never paint into the letterbox.
-      drawOverlay(ctx, overlay.bitmap, overlay.composition, composition);
+      drawOverlay(ctx, overlay.bitmap, overlay.composition, drawn);
       if (hover || dragging) {
-        const { centerPx, widthPx, heightPx, rotationDegrees, shape } = composition;
+        const { centerPx, widthPx, heightPx, rotationDegrees, shape } = drawn;
         ctx.translate(...centerPx);
         ctx.rotate(rotationDegrees * Math.PI / 180);
         ctx.beginPath();
@@ -117,7 +120,7 @@ export function PhotoCanvas({ preview, photo, overlay, composition, mode, edit, 
       ctx.restore();
     };
     redraw.current();
-  }, [preview, photo, overlay, composition, hover, dragging]);
+  }, [preview, photo, overlay, drawn, hover, dragging]);
 
   useLayoutEffect(() => {
     const draw = () => redraw.current();

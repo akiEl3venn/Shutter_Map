@@ -43,10 +43,9 @@ export function App() {
   const requestId = useRef(0);
   const dragDepth = useRef(0);
   const [dragMode, setDragMode] = useState<DragMode>('layer');
-  const { editor, edit } = useComposition(photo, location);
-  const composition = editor?.composition ?? null;
-  const map = useMapPreview(photo, preview, composition);
-  const exporter = useExport(photo, composition, map.exportLayer);
+  const { editor, drawn, edit } = useComposition(photo, location);
+  const map = useMapPreview(photo, preview, drawn);
+  const exporter = useExport(photo, drawn, map.exportLayer);
   const busy = exporter.state.status === 'decoding' || exporter.state.status === 'encoding';
 
   // Release a bitmap only after React has committed its replacement, so no draw can see it closed.
@@ -237,7 +236,7 @@ export function App() {
       <div className="workspace" aria-busy={loading}>
         <div className="stage">
           <section className="preview-area" aria-label={strings.previewLabel}>
-            <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} composition={composition} mode={dragMode}
+            <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} composition={editor?.composition ?? null} drawn={drawn} mode={dragMode}
               edit={edit} choosePoint={coordinate => chooseLocation({ source: 'coordinate', coordinate, focus: focusFor(location) })} />
             {!photo && <div className="empty-preview">
               <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
@@ -338,7 +337,7 @@ export function App() {
               </div>}
             </div>
           </section>
-          {photo && editor && <EditPanel state={editor} photo={photo} edit={edit} mode={dragMode} setMode={setDragMode} />}
+          {photo && editor && drawn && <EditPanel state={editor} drawn={drawn} photo={photo} edit={edit} mode={dragMode} setMode={setDragMode} />}
           <div className="status-area">
             <p className="status" role="status">{loading ? loadingMessage : error ? '' : photo ? strings.loaded : strings.waiting}</p>
             {error && <p className="error" role="alert">{error}</p>}

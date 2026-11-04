@@ -5,6 +5,7 @@ import { lonLatToWorld, metersPerWorldUnit, worldToLonLat } from './mercator.ts'
 
 type Point = readonly [number, number];
 type Sides = MapComposition['feather']['squarePx'];
+type SideFlags = readonly [top: boolean, right: boolean, bottom: boolean, left: boolean];
 export type Anchor = readonly [column: 0 | 1 | 2, row: 0 | 1 | 2];
 export interface PhotoSize { widthPx: number; heightPx: number }
 export interface EditorState {
@@ -16,6 +17,8 @@ export interface EditorState {
   offsetPx: Point;
   /** Height over width, so a rectangle returns with its own proportions after visiting another shape. */
   rectangleAspect: number;
+  /** Sides someone asked to fade on their own, which keep that fade even in a photo's corner. */
+  softSides: SideFlags;
 }
 
 export type EditAction =
@@ -46,7 +49,8 @@ export function createEditorState(photo: PhotoSize, coordinate: LonLat, focus: M
     { orientedWidthPx: photo.widthPx, orientedHeightPx: photo.heightPx }, { coordinate },
   )!;
   const composition = { ...base, labels: { ...base.labels, focus } };
-  return { composition, anchor: [1, 1], marginPx: [0, 0], offsetPx: [0, 0], rectangleAspect: 1 / 2 };
+  return { composition, anchor: [1, 1], marginPx: [0, 0], offsetPx: [0, 0], rectangleAspect: 1 / 2,
+    softSides: [false, false, false, false] };
 }
 
 /** From the layer's own size, not its turned outline, so that turning it leaves it where it is. */
@@ -108,20 +112,51 @@ function resized(c: MapComposition, width: number, min: number, max: number): Ma
       rectanglePx: scaleSides(c.feather.rectanglePx) } };
 }
 
+/** Sitting exactly on an anchor in one of the photo's corners. Moved off it, the layer is simply somewhere on the photo. */
+export function inPhotoCorner({ composition: c, anchor, offsetPx }: EditorState): boolean {
+  return c.shape !== 'circle' && anchor[0] !== 1 && anchor[1] !== 1 && offsetPx[0] === 0 && offsetPx[1] === 0;
+}
+
 /**
- * In a photo's corner, the two sides along its edges stay hard: fading them would float the map off the edge. These are
- * the layer's own sides, top first, so a quarter turn moves them round. Any other angle has no side along an edge.
+ * The composition to draw. In a corner the photo's corner stays at full strength: fading towards it would float the map
+ * off the photo's edges. So the layer reaches out until it covers that corner, and no side fades as far as it. Upright
+ * this just leaves the two sides along the photo's edges hard; turned, the map goes on filling the corner, and each
+ * side's fade grows back gradually as the side turns away from it.
  */
-export function cornerSides(anchor: Anchor, rotationDegrees: number): MapComposition['feather']['hardSides'] {
-  if (anchor[0] === 1 || anchor[1] === 1 || rotationDegrees % 90 !== 0) return [false, false, false, false];
-  const photoSides = [anchor[1] === 0, anchor[0] === 2, anchor[1] === 2, anchor[0] === 0];
-  const turns = (rotationDegrees / 90 % 4 + 4) % 4;
-  const side = (i: number) => photoSides[(i + turns) % 4]!;
-  return [side(0), side(1), side(2), side(3)];
+export function drawnComposition(state: EditorState, photo: PhotoSize): MapComposition {
+  const { composition: c, anchor, marginPx, softSides } = state;
+  if (!inPhotoCorner(state)) return c;
+  const a = -c.rotationDegrees * Math.PI / 180;
+  const dx = (anchor[0] === 0 ? marginPx[0] : photo.widthPx - marginPx[0]) - c.centerPx[0];
+  const dy = (anchor[1] === 0 ? marginPx[1] : photo.heightPx - marginPx[1]) - c.centerPx[1];
+  // The corner in the layer's own axes, then how far it lies beyond each side, top first. Inside, this is negative.
+  const x = dx * Math.cos(a) - dy * Math.sin(a), y = dx * Math.sin(a) + dy * Math.cos(a);
+  const beyond = [-y - c.heightPx / 2, x - c.widthPx / 2, y - c.heightPx / 2, -x - c.widthPx / 2];
+  // A center can be half a pixel off, so under a pixel counts as on the side.
+  const reach = beyond.map((value, i) => softSides[i] || value < 1 ? 0 : Math.ceil(value));
+  const key = c.shape === 'square' ? 'squarePx' : 'rectanglePx';
+  const fades = c.feather[key].map((saved, i) => {
+    const toCorner = reach[i]! - beyond[i]!;
+    return softSides[i] ? saved : Math.min(saved, toCorner < 1 ? 0 : toCorner);
+  }) as unknown as Sides;
+  const feathered = { ...c, feather: { ...c.feather, [key]: fades } };
+  if (reach.every(value => value === 0)) return feathered;
+
+  const grown = { ...feathered, widthPx: c.widthPx + reach[1]! + reach[3]!, heightPx: c.heightPx + reach[0]! + reach[2]! };
+  // The longer layer's center moves along the layer's axes, and the map's center with it, so the roads stay put.
+  const sx = (reach[1]! - reach[3]!) / 2, sy = (reach[2]! - reach[0]!) / 2;
+  const [cx, cy] = snapCenter([c.centerPx[0] + sx * Math.cos(a) + sy * Math.sin(a),
+    c.centerPx[1] - sx * Math.sin(a) + sy * Math.cos(a)], grown);
+  const px = cx - c.centerPx[0], py = cy - c.centerPx[1];
+  const worldPerPx = c.metersPerImagePixel / metersPerWorldUnit(c.geographicCenter[1]);
+  const [worldX, worldY] = lonLatToWorld(c.geographicCenter);
+  return { ...grown, centerPx: [cx, cy], geographicCenter: worldToLonLat(
+    worldX + (px * Math.cos(a) - py * Math.sin(a)) * worldPerPx,
+    clamp(worldY + (px * Math.sin(a) + py * Math.cos(a)) * worldPerPx, 0, 1)) };
 }
 
 export function editComposition(state: EditorState, action: EditAction, photo: PhotoSize): EditorState {
-  let { composition: c, anchor, marginPx, offsetPx, rectangleAspect } = state;
+  let { composition: c, anchor, marginPx, offsetPx, rectangleAspect, softSides } = state;
   const max = Math.max(photo.widthPx, photo.heightPx), min = Math.min(MIN_LAYER_PX, max);
   // Restrict the crop itself when it reaches a km limit, preserving geographic scale and stroke sizes.
   const cropWidth = (w: number) => Math.round(clamp(w, Math.max(min, MIN_RANGE_KM * 1000 / c.metersPerImagePixel),
@@ -130,7 +165,11 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
   switch (action.type) {
     case 'reset': return createEditorState(photo, c.geographicCenter, c.labels.focus);
     case 'center': case 'offset': break; // Both depend on the anchor's position for the final layer, below.
-    case 'anchor': anchor = action.value; offsetPx = [0, 0]; break;
+    case 'anchor':
+      anchor = action.value;
+      offsetPx = [0, 0];
+      softSides = [false, false, false, false];
+      break;
     case 'margin':
       marginPx = [clamp(action.value[0], 0, photo.widthPx), clamp(action.value[1], 0, photo.heightPx)];
       break;
@@ -166,9 +205,8 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
       const { side, value } = action;
       const widths = [...c.feather[key]] as [number, number, number, number];
       widths[side] = clamp(value, 0, (side % 2 ? c.widthPx : c.heightPx) / 2);
-      const hardSides = [...c.feather.hardSides] as [boolean, boolean, boolean, boolean];
-      hardSides[side] = false; // Asking for a fade on this side overrides the corner's default.
-      c = { ...c, feather: { ...c.feather, [key]: widths, hardSides } };
+      c = { ...c, feather: { ...c.feather, [key]: widths } };
+      softSides = softSides.map((soft, i) => soft || i === side) as unknown as SideFlags;
       break;
     }
     case 'allFeather': {
@@ -176,6 +214,7 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
       const key = c.shape === 'square' ? 'squarePx' : 'rectanglePx';
       const width = clamp(action.value, 0, Math.min(c.widthPx, c.heightPx) / 2);
       c = { ...c, feather: { ...c.feather, [key]: [width, width, width, width] } };
+      softSides = [false, false, false, false];
       break;
     }
     case 'color': c = { ...c, style: { ...c.style, color: action.value } }; break;
@@ -195,12 +234,6 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     offsetPx = [Math.round(clamp(wanted[0]!, -base[0], photo.widthPx - base[0])),
       Math.round(clamp(wanted[1]!, -base[1], photo.heightPx - base[1]))];
   }
-  if (action.type === 'anchor' || action.type === 'center' || action.type === 'offset'
-    || action.type === 'rotation' || action.type === 'shape') {
-    // Moved off the corner, its sides no longer run along the photo's edges.
-    const inCorner = offsetPx[0] === 0 && offsetPx[1] === 0;
-    c = { ...c, feather: { ...c.feather, hardSides: inCorner ? cornerSides(anchor, c.rotationDegrees) : [false, false, false, false] } };
-  }
   const center = [base[0] + offsetPx[0], base[1] + offsetPx[1]] as const;
   const [x, y] = snapCenter([clamp(center[0], 0, photo.widthPx), clamp(center[1], 0, photo.heightPx)], c);
   const axis = (snapped: number, target: number, dimension: number) => {
@@ -210,5 +243,5 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     return snapped > dimension ? snapped - 1 : snapped;
   };
   const centerPx: Point = [axis(x, center[0], photo.widthPx), axis(y, center[1], photo.heightPx)];
-  return { composition: { ...c, centerPx }, anchor, marginPx, offsetPx, rectangleAspect };
+  return { composition: { ...c, centerPx }, anchor, marginPx, offsetPx, rectangleAspect, softSides };
 }
