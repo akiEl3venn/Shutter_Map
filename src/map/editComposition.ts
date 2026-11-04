@@ -27,6 +27,7 @@ export type EditAction =
   | { type: 'layer'; layer: LayerId; value: boolean }
   | { type: 'detail'; value: DetailOffset }
   | { type: 'language'; value: LabelLanguage }
+  | { type: 'showAreas'; value: boolean }
   | { type: 'reset' };
 
 // Experimental limits in config/editor-policy.json.
@@ -139,6 +140,7 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     case 'layer': c = { ...c, visibleLayers: { ...c.visibleLayers, [action.layer]: action.value } }; break;
     case 'detail': c = { ...c, detailOffset: action.value }; break;
     case 'language': c = { ...c, labels: { ...c.labels, language: action.value } }; break;
+    case 'showAreas': c = { ...c, labels: { ...c.labels, showAreas: action.value } }; break;
     case 'maxCount': c = { ...c, labels: { ...c.labels, maxCount: clamp(Math.round(action.value), 0, MAX_LABELS) } }; break;
   }
 

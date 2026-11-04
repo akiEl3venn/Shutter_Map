@@ -1,7 +1,7 @@
 import type { MapComposition } from '../contracts.ts';
 import type { TileFeatures } from './decodeTile.ts';
 import { rasterSize, tileTransform } from './layerGeometry.ts';
-import { labelStyle, layoutLabels, selectLabelName, type LabelCandidate } from './labels.ts';
+import { isAreaName, labelStyle, layoutLabels, selectLabelName, type LabelCandidate } from './labels.ts';
 import { circleFeather, fadeBand, fadeStops, haloFor, layerLook, lineWidths, sideFeather } from './style.ts';
 import { thinRoads } from './thinRoads.ts';
 
@@ -60,6 +60,7 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
   for (const tile of tiles) {
     const { matrix: [s, , , , left, top] } = tileTransform(tile.key, tile.extent, composition, 1);
     for (const place of tile.places) {
+      if (isAreaName(place.kind) && !composition.labels.showAreas) continue;
       candidates.push({
         name: selectLabelName(place, composition.labels.language),
         kind: place.kind, rank: place.rank, x: left + s * place.x, y: top + s * place.y,

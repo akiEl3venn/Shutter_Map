@@ -69,7 +69,7 @@ export const strings = {
   lineColor: '颜色', colorAuto: '自动', colorCustom: '自选', lineWidth: '线宽', opacity: '不透明度',
   layerRoads: '道路', layerHiking: '徒步路径', layerWater: '水体', layerPlaces: '地名地标',
   detail: '细节', detailLevels: ['较少', '标准', '较多', '最多'], detailNote: '每高一档，要下载的瓦片约多 4 倍。',
-  labelLanguage: '语言', labelLocal: '当地名', labelCount: '最多显示', resetComposition: '恢复默认',
+  labelLanguage: '语言', labelLocal: '当地名', labelCount: '最多显示', labelAreas: '显示城市和城区名称', resetComposition: '恢复默认',
   geoLoading: '正在加载地名数据…',
   geoFailed: '地名数据加载失败',
   retry: '重试',

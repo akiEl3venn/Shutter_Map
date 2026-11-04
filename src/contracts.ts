@@ -90,6 +90,8 @@ export interface MapComposition {
   labels: {
     language: LabelLanguage;
     maxCount: number;
+    /** Cities, towns and districts. Off by default: named areas crowd the map, while landmarks are what people look for. */
+    showAreas: boolean;
   };
   feather: {
     circlePx: ImagePixels;

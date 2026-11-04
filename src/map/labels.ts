@@ -9,6 +9,9 @@ export function selectLabelName(place: { name: string; names: Partial<Record<Nam
   return language === 'zh' ? foldCjk(name) : name;
 }
 
+/** Named areas, as opposed to the points of interest within them. */
+export const isAreaName = (kind: PlaceKind) => kind === 'city' || kind === 'town' || kind === 'village';
+
 export interface LabelCandidate {
   kind: PlaceKind;
   name: string;
@@ -31,7 +34,8 @@ export const labelStyle = { cityFont: 54, townFont: 44, pointFont: 36, markerRad
 const LABEL_INSET = 0.34;
 
 type Box = { left: number; right: number; top: number; bottom: number };
-const priority: Record<PlaceKind, number> = { city: 0, town: 1, peak: 2, landmark: 3, village: 4 };
+// Landmarks before peaks: a hilly city has dozens of peaks, which would otherwise take every label.
+const priority: Record<PlaceKind, number> = { city: 0, town: 1, landmark: 2, peak: 3, village: 4 };
 
 type Mask = { shape: 'circle'; feather: number }
   | { shape: 'square' | 'rectangle'; feather: MapComposition['feather']['rectanglePx'] };

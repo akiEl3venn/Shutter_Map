@@ -230,6 +230,8 @@ export function EditPanel(props: EditPanelProps) {
         </select></label>
         <NumberField label={s.labelCount} min={0} max={20} step={1} value={c.labels.maxCount}
           change={value => edit({ type: 'maxCount', value })} />
+        <label className="edit-check"><input type="checkbox" checked={c.labels.showAreas}
+          onChange={e => edit({ type: 'showAreas', value: e.currentTarget.checked })} />{s.labelAreas}</label>
       </fieldset>
     </Group>
     <button type="button" className="secondary" onClick={() => edit({ type: 'reset' })}>{s.resetComposition}</button>
