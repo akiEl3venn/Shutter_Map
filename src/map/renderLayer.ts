@@ -1,7 +1,7 @@
 import type { MapComposition } from '../contracts.ts';
 import type { TileFeatures } from './decodeTile.ts';
 import { projectToLayer, rasterSize, tileTransform } from './layerGeometry.ts';
-import { isAreaName, labelStyle, layoutLabels, markFocus, selectLabelName, type LabelCandidate, type PlacedLabel } from './labels.ts';
+import { focusLabel, isAreaName, labelStyle, layoutLabels, markFocus, selectLabelName, type LabelCandidate, type PlacedLabel } from './labels.ts';
 import { circleFeather, fadeBand, fadeStops, focusColor, layerLook, lineWidths, roadSpacing, sideFeather } from './style.ts';
 import { roadTiers, TIER_COUNT, tierLimit, type PlacedRoad } from './thinRoads.ts';
 
@@ -66,8 +66,10 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
     const { matrix: [s, , , , left, top] } = tileTransform(tile.key, tile.extent, composition, 1);
     for (const place of tile.places) {
       if (isAreaName(place.kind) && !composition.labels.showAreas) continue;
+      const name = selectLabelName(place, composition.labels.language);
+      if (!name) continue;
       candidates.push({
-        name: selectLabelName(place, composition.labels.language),
+        name,
         kind: place.kind, rank: place.rank, x: left + s * place.x, y: top + s * place.y,
         aliases: [place.name, ...Object.values(place.names)],
       });
@@ -78,7 +80,7 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
   if (focus) {
     const [x, y] = projectToLayer(focus.coordinate, composition);
     marked = markFocus(candidates, { x, y, metersPerPx: composition.metersPerImagePixel, name: focus.name,
-      englishName: focus.englishName, label: language === 'en' ? focus.englishName : focus.name });
+      englishName: focus.englishName, label: focusLabel(focus, language) });
   }
   const labels = layoutLabels(marked, {
     widthPx: composition.widthPx, heightPx: composition.heightPx, scalePx: composition.scalePx,

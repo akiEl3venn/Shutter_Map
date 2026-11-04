@@ -2,11 +2,24 @@ import type { LocationChoice, MapComposition, MapFocus, PlaceKind } from '../con
 import { foldCjk } from '../search/normalize.ts';
 
 type NameLanguage = 'en' | 'zh' | 'ja';
+const inLatinLetters = (name: string) => /^[\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]+$/u.test(name);
+
+/**
+ * The name to show, if any. Local names are always in Latin letters: a place's own name where it has one (Musée du
+ * Louvre), otherwise its English or romanized one (Shinjuku Golden Gai). A place with neither is left off rather than
+ * romanized here, which would need a dictionary: read as Chinese, 新宿 would come out as "Xinsu".
+ */
 export function selectLabelName(place: { name: string; names: Partial<Record<NameLanguage, string>> },
-  language: 'local' | NameLanguage): string {
-  const name = (language === 'local' ? undefined : place.names[language]) || place.name;
-  // Only a Chinese reader wants simplified forms; 'local' and Japanese keep their own script (渋谷, not 涩谷).
+  language: 'local' | NameLanguage): string | undefined {
+  if (language === 'local') return [place.name, place.names.en].find(name => name && inLatinLetters(name));
+  const name = place.names[language] || place.name;
+  // Only a Chinese reader wants simplified forms; Japanese keeps its own script (渋谷, not 涩谷).
   return language === 'zh' ? foldCjk(name) : name;
+}
+
+/** A chosen landmark's label where the map has none. Search data holds a Chinese name and a Latin one, and only a Chinese map wants the former. */
+export function focusLabel(focus: MapFocus, language: 'local' | NameLanguage): string | undefined {
+  return language === 'zh' ? focus.name : focus.englishName ?? focus.name;
 }
 
 /** Named areas, as opposed to the points of interest within them. */
