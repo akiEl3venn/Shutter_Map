@@ -1,6 +1,6 @@
 import type { DetailOffset, LabelLanguage, LayerId, LonLat, MapComposition, MapFocus } from '../contracts.ts';
 import { defaultComposition, MIN_LAYER_PX } from './composition.ts';
-import { layerExtent, rasterSize } from './layerGeometry.ts';
+import { projectToLayer, rasterSize } from './layerGeometry.ts';
 import { lonLatToWorld, metersPerWorldUnit, worldToLonLat } from './mercator.ts';
 
 type Point = readonly [number, number];
@@ -49,13 +49,29 @@ export function createEditorState(photo: PhotoSize, coordinate: LonLat, focus: M
   return { composition, anchor: [1, 1], marginPx: [0, 0], offsetPx: [0, 0], rectangleAspect: 1 / 2 };
 }
 
+/** From the layer's own size, not its turned outline, so that turning it leaves it where it is. */
 export function anchoredCenter(anchor: Anchor, margin: Point, photo: PhotoSize, c: MapComposition): [number, number] {
-  const [w, h] = layerExtent(c);
   const axis = (slot: number, size: number, extent: number, gap: number) => {
     const low = extent / 2 + gap, high = size - extent / 2 - gap;
     return low > high ? size / 2 : low + (high - low) * slot / 2;
   };
-  return [axis(anchor[0], photo.widthPx, w, margin[0]), axis(anchor[1], photo.heightPx, h, margin[1])];
+  return [axis(anchor[0], photo.widthPx, c.widthPx, margin[0]), axis(anchor[1], photo.heightPx, c.heightPx, margin[1])];
+}
+
+/**
+ * The map's center after turning the layer to `degrees`, chosen so the map turns around the landmark it is about: that
+ * point stays where it is on the photo. Without one, the map simply turns around its own center.
+ */
+function turnedAroundFocus(c: MapComposition, degrees: number): LonLat {
+  if (!c.labels.focus) return c.geographicCenter;
+  const [x, y] = projectToLayer(c.labels.focus.coordinate, c);
+  const dx = x - c.widthPx / 2, dy = y - c.heightPx / 2;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return c.geographicCenter;
+  const turn = (c.rotationDegrees - degrees) * Math.PI / 180;
+  const worldPerPx = c.metersPerImagePixel / metersPerWorldUnit(c.geographicCenter[1]);
+  const [focusX, focusY] = lonLatToWorld(c.labels.focus.coordinate);
+  return worldToLonLat(focusX - (dx * Math.cos(turn) - dy * Math.sin(turn)) * worldPerPx,
+    clamp(focusY - (dx * Math.sin(turn) + dy * Math.cos(turn)) * worldPerPx, 0, 1));
 }
 
 export function snapCenter(center: Point, c: MapComposition): [number, number] {
@@ -136,7 +152,7 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
       let degrees = action.value % 360;
       if (degrees > 180) degrees -= 360;
       if (degrees < -180) degrees += 360;
-      c = { ...c, rotationDegrees: degrees }; break;
+      c = { ...c, rotationDegrees: degrees, geographicCenter: turnedAroundFocus(c, degrees) }; break;
     }
     case 'geographicCenter': c = { ...c, geographicCenter: action.value }; break;
     case 'focus': c = { ...c, labels: { ...c.labels, focus: action.value } }; break;
