@@ -37,6 +37,7 @@ export const strings = {
   mapProgress: (loaded: number, total: number) => `正在加载地图数据 ${loaded}/${total}`,
   mapDebug: (zoom: number, total: number, bytes: number, empty: number) =>
     `开发信息：z${zoom} · ${total} 块瓦片 · ${(bytes / 1_000_000).toFixed(2)} MB（解压后）· ${empty} 块无数据`,
+  mapDevEdge: '开发数据只覆盖部分区域，地图在数据边界处会被直线切断。这不是羽化问题，正式数据没有这条边界。',
   mapFailed: '部分地图数据加载失败',
   mapRenderFailed: '地图线稿绘制失败',
   mapRenderRetry: '重新绘制地图线稿',
