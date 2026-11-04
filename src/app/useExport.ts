@@ -3,6 +3,7 @@ import type { MapComposition, PhotoSession } from '../contracts.ts';
 import { defaultExportFormat, exportFileName, type ExportFormat } from '../export/formats.ts';
 import { runExport } from '../export/exportClient.ts';
 import { decodeImage } from '../photo/decode.ts';
+import { renderKey } from '../map/editComposition.ts';
 import { saveBlob } from './download.ts';
 
 export type ExportState =
@@ -50,8 +51,9 @@ export function useExport(photo: PhotoSession | null, composition: MapCompositio
       const rendered = await exportLayer();
       layer = rendered.bitmap;
       if (!live()) return;
+      if (renderKey(rendered.composition) !== renderKey(composition)) throw new Error('view-changed');
       setState({ status: 'encoding' });
-      const encoding = runExport({ photo: source, layer, composition: rendered.composition, format });
+      const encoding = runExport({ photo: source, layer, composition, format });
       source = layer = undefined; // The export client/worker owns both bitmaps now.
       job.cancel = encoding.cancel;
       const blob = await encoding.result;

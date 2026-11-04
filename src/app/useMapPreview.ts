@@ -1,20 +1,22 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { LocationChoice, MapComposition, PhotoSession } from '../contracts.ts';
-import { defaultComposition } from '../map/composition.ts';
+import type { MapComposition, PhotoSession } from '../contracts.ts';
+import { renderKey } from '../map/editComposition.ts';
 import { createMapClient } from '../map/mapClient.ts';
 import type { MapProgress } from '../map/mapProtocol.ts';
 import { lineColorFor } from '../map/style.ts';
 import type { Overlay } from './PhotoCanvas.tsx';
 
-function sampleColor(preview: ImageBitmap, photo: PhotoSession, composition: MapComposition) {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 32;
-  const ctx = canvas.getContext('2d')!;
+const RENDER_THROTTLE_MS = 120; // config/editor-policy.json
+
+function sampleColor(ctx: CanvasRenderingContext2D, preview: ImageBitmap, photo: PhotoSession,
+  x: number, y: number, widthPx: number, heightPx: number) {
   const sx = preview.width / photo.orientedWidthPx;
   const sy = preview.height / photo.orientedHeightPx;
-  const { centerPx, widthPx, heightPx } = composition;
-  ctx.drawImage(preview, (centerPx[0] - widthPx / 2) * sx, (centerPx[1] - heightPx / 2) * sy,
-    widthPx * sx, heightPx * sy, 0, 0, 32, 32);
+  const left = Math.max(0, x - widthPx / 2), right = Math.min(photo.orientedWidthPx, x + widthPx / 2);
+  const top = Math.max(0, y - heightPx / 2), bottom = Math.min(photo.orientedHeightPx, y + heightPx / 2);
+  ctx.clearRect(0, 0, 32, 32);
+  // The letterbox is not part of the photo, even when the user places the map across an edge.
+  ctx.drawImage(preview, left * sx, top * sy, (right - left) * sx, (bottom - top) * sy, 0, 0, 32, 32);
   const { data } = ctx.getImageData(0, 0, 32, 32);
   let luminance = 0;
   for (let i = 0; i < data.length; i += 4) {
@@ -23,12 +25,21 @@ function sampleColor(preview: ImageBitmap, photo: PhotoSession, composition: Map
   return lineColorFor(luminance / (255 * 32 * 32));
 }
 
-export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap | null, location: LocationChoice | null) {
-  // Choosing the same point through a different input only changes the location label.
-  const longitude = location?.coordinate[0];
-  const latitude = location?.coordinate[1];
-  const composition = useMemo(() => defaultComposition(photo, longitude === undefined || latitude === undefined
-    ? null : { coordinate: [longitude, latitude] }), [photo, longitude, latitude]);
+export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap | null, composition: MapComposition | null) {
+  const [sampler] = useState(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 32;
+    return canvas.getContext('2d', { willReadFrequently: true })!;
+  });
+  const [x, y] = composition?.centerPx ?? [0, 0];
+  const width = composition?.widthPx ?? 0, height = composition?.heightPx ?? 0;
+  const color = composition?.style.color;
+  const lineColor = useMemo(() => color === 'auto' && photo && preview
+    ? sampleColor(sampler, preview, photo, x, y, width, height) : color ?? '#ffffff',
+    [sampler, color, photo, preview, x, y, width, height]);
+  const wanted = composition ? renderKey(composition) + lineColor : null;
+  const lastKey = useRef<string | null>(null);
+  const lastSent = useRef(-Infinity);
   const [progress, setProgress] = useState<MapProgress | null>(null);
   const [rendering, setRendering] = useState(false);
   const [crashed, setCrashed] = useState(false);
@@ -49,7 +60,8 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
     },
     frame(value, request) {
       if (!source.current) { value.bitmap.close(); return; }
-      replaceFrame({ bitmap: value.bitmap, composition: request.composition, photo: source.current });
+      replaceFrame({ bitmap: value.bitmap, composition: request.composition, photo: source.current,
+        key: renderKey(request.composition) + request.lineColor });
       if (value.complete) setRendering(false);
     },
     failed() {
@@ -76,26 +88,38 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
 
   useLayoutEffect(() => {
     source.current = photo;
+    lastKey.current = null;
+    lastSent.current = -Infinity;
     setCrashed(false);
     setProgress(null);
-    if (!photo || !preview || !composition) {
-      client.cancel();
-      replaceFrame(null);
-      setRendering(false);
-      return;
-    }
-    setRendering(true);
-    client.render({ composition, outputScale: preview.width / photo.orientedWidthPx,
-      lineColor: sampleColor(preview, photo, composition) });
-  }, [client, composition, photo, preview]);
+    client.cancel();
+    replaceFrame(null);
+    setRendering(false);
+  }, [client, photo, preview, !!composition]);
+
+  useLayoutEffect(() => {
+    if (!photo || !preview || !composition || !wanted || wanted === lastKey.current) return;
+    const send = () => {
+      lastSent.current = performance.now();
+      lastKey.current = wanted;
+      setRendering(true);
+      setCrashed(false);
+      client.render({ composition, outputScale: preview.width / photo.orientedWidthPx, lineColor });
+    };
+    const wait = lastSent.current + RENDER_THROTTLE_MS - performance.now();
+    if (wait <= 0) { send(); return; }
+    const timer = setTimeout(send, wait);
+    return () => clearTimeout(timer);
+  }, [client, composition, photo, preview, lineColor, wanted]);
 
   function retry() {
     setCrashed(false);
     setRendering(true);
     client.retry();
   }
-  const ready = !!composition && frame.overlay?.composition === composition && !!progress
-    && !rendering && !crashed && progress.failed === 0 && progress.loaded === progress.total && progress.empty < progress.total;
-  return { progress, overlay: composition ? frame.overlay : null, rendering, crashed, retry,
-    composition, exportLayer: client.exportLayer, ready };
+  const pending = rendering || (!!wanted && wanted !== lastKey.current);
+  const ready = !!wanted && frame.overlay?.key === wanted && frame.overlay.photo === photo && !!progress
+    && !pending && !crashed && progress.failed === 0 && progress.loaded === progress.total && progress.empty < progress.total;
+  return { progress, overlay: composition ? frame.overlay : null, rendering: pending, crashed, retry,
+    exportLayer: client.exportLayer, ready };
 }

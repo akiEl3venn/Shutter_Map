@@ -13,7 +13,9 @@ import { pathForPlace } from '../search/cascade.ts';
 import type { CountrySummary, RegionSelection } from '../search/cascade.ts';
 import { prepareIndexInChunks } from '../search/match.ts';
 import type { CountryData, SearchIndex } from '../search/match.ts';
-import { PhotoCanvas } from './PhotoCanvas.tsx';
+import { PhotoCanvas, type DragMode } from './PhotoCanvas.tsx';
+import { EditPanel } from './EditPanel.tsx';
+import { useComposition } from './useComposition.ts';
 import { useMapPreview } from './useMapPreview.ts';
 import { exportFormats, type ExportFormat } from '../export/formats.ts';
 import { useExport } from './useExport.ts';
@@ -37,8 +39,11 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(0);
   const dragDepth = useRef(0);
-  const map = useMapPreview(photo, preview, location);
-  const exporter = useExport(photo, map.composition, map.exportLayer);
+  const [dragMode, setDragMode] = useState<DragMode>('layer');
+  const { editor, edit } = useComposition(photo, location);
+  const composition = editor?.composition ?? null;
+  const map = useMapPreview(photo, preview, composition);
+  const exporter = useExport(photo, composition, map.exportLayer);
   const busy = exporter.state.status === 'decoding' || exporter.state.status === 'encoding';
 
   // Release a bitmap only after React has committed its replacement, so no draw can see it closed.
@@ -124,6 +129,7 @@ export function App() {
       }
       const exifLocation = toLonLat(exif.gps);
       setPreview(decoded.preview);
+      setDragMode('layer');
       setPhoto({
         file,
         exifOrientation: exif.orientation,
@@ -188,7 +194,8 @@ export function App() {
       <div className="workspace" aria-busy={loading}>
         <div className="stage">
           <section className="preview-area" aria-label={strings.previewLabel}>
-            <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} />
+            <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} composition={composition} mode={dragMode}
+              edit={edit} choosePoint={coordinate => chooseLocation({ source: 'coordinate', coordinate })} />
             {!photo && <div className="empty-preview">
               <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
               <p>{strings.dropHint}</p><p className="muted">{strings.formatHint}</p>
@@ -205,10 +212,12 @@ export function App() {
               </label>
               <button type="button" disabled={loading || !map.ready || busy}
                 onClick={() => void exporter.start()}>{strings.exportAction}</button>
+              {editor && <button type="button" className="secondary"
+                onClick={() => document.getElementById('edit-panel')?.scrollIntoView({ behavior: 'smooth' })}>{strings.editJump}</button>}
               <p role="status">{exporter.state.status === 'decoding' ? strings.exportDecoding
                 : exporter.state.status === 'encoding' ? strings.exportEncoding
                 : exporter.state.status === 'done' ? strings.exportDone(exporter.state.width, exporter.state.height, exporter.state.bytes)
-                : exporter.state.status === 'idle' && !map.ready ? strings.exportWaiting
+                : exporter.state.status === 'idle' && !map.ready && !map.rendering ? strings.exportWaiting
                 : ''}</p>
             </div>
             {exporter.state.status === 'failed' && <p className="error" role="alert">{strings.exportFailed}</p>}
@@ -262,7 +271,8 @@ export function App() {
             <div className="map-data">
               <p role="status" aria-live="polite">
                 {map.crashed ? null
-                  : map.rendering ? (map.progress ? strings.mapProgress(map.progress.loaded, map.progress.total) : strings.mapStarting)
+                  : map.rendering && (!map.progress || map.progress.loaded < map.progress.total)
+                    ? (map.progress ? strings.mapProgress(map.progress.loaded, map.progress.total) : strings.mapStarting)
                   : !map.progress ? strings.mapWaiting
                   : map.progress.failed > 0 ? null
                   : map.progress.empty === map.progress.total ? strings.mapNoData
@@ -280,6 +290,7 @@ export function App() {
               <p className="muted">{strings.mapAttribution}</p>
             </div>
           </section>
+          {photo && editor && <EditPanel state={editor} photo={photo} edit={edit} mode={dragMode} setMode={setDragMode} />}
           <div className="status-area">
             <p className="status" role="status">{loading ? loadingMessage : error ? '' : photo ? strings.loaded : strings.waiting}</p>
             {error && <p className="error" role="alert">{error}</p>}

@@ -2,7 +2,7 @@
 import type { TileKey } from '../contracts.ts';
 import { decodeTile } from './decodeTile.ts';
 import type { TileFeatures } from './decodeTile.ts';
-import { limitedTileCover, zoomFor } from './mercator.ts';
+import { limitedTileCover, showsThinnedRoads, zoomFor } from './mercator.ts';
 import type { TileCoverage } from './mercator.ts';
 import type { ExportLayerRequest, MapWorkerRequest, MapWorkerResponse, RenderRequest } from './mapProtocol.ts';
 import { prepareTile, renderLayer } from './renderLayer.ts';
@@ -23,6 +23,7 @@ interface View {
   loaded: Map<string, CachedTile>;
   failed: Set<string>;
   lastFrame: number;
+  holdUntil: number;
   timer?: number;
 }
 
@@ -31,6 +32,7 @@ const loader = createTileLoader({ url: key => tileUrl(key.z, key.x, key.y), cach
 const cache = new Map<string, CachedTile>();
 const cacheLimit = 200;
 const frameIntervalMs = 150;
+const partialFrameHoldMs = 200; // config/editor-policy.json
 const tileId = ({ z, x, y }: TileKey) => `${z}/${x}/${y}`;
 let active: View | null = null;
 
@@ -80,7 +82,7 @@ function exportLayer({ id, viewId }: ExportLayerRequest) {
       throw new Error('view-not-ready');
     }
     const { composition, lineColor } = view.request;
-    bitmap = renderLayer(tilesOf(view), composition, 1, lineColor, true);
+    bitmap = renderLayer(tilesOf(view), composition, 1, lineColor, true, showThinned(view));
     send({ type: 'export-layer', id, bitmap }, [bitmap]);
   } catch {
     bitmap?.close();
@@ -88,9 +90,19 @@ function exportLayer({ id, viewId }: ExportLayerRequest) {
   }
 }
 
+function showThinned({ coverage, request: { composition } }: View) {
+  // "Less detail" must stay less, even where the deepest tiles are blown up.
+  return composition.detailOffset >= 0
+    && showsThinnedRoads(coverage.zoom, composition.metersPerImagePixel, composition.geographicCenter[1], tileset.maxZoom);
+}
+
 function scheduleFrame(view: View) {
-  if (view.timer !== undefined) return;
-  const delay = Math.max(0, Math.ceil(view.lastFrame + frameIntervalMs - performance.now()));
+  const settled = view.failed.size + view.loaded.size === view.coverage.keys.length;
+  if (view.timer !== undefined) {
+    if (!settled) return;
+    worker.clearTimeout(view.timer); // Complete tiles take precedence over a pending partial frame.
+  }
+  const delay = settled ? 0 : Math.max(0, Math.ceil(Math.max(view.holdUntil, view.lastFrame + frameIntervalMs) - performance.now()));
   view.timer = worker.setTimeout(() => {
     view.timer = undefined;
     if (active !== view) return;
@@ -98,7 +110,7 @@ function scheduleFrame(view: View) {
     const complete = view.loaded.size === view.coverage.keys.length;
     let bitmap: ImageBitmap | undefined;
     try {
-      bitmap = renderLayer(tilesOf(view), composition, outputScale, lineColor, complete);
+      bitmap = renderLayer(tilesOf(view), composition, outputScale, lineColor, complete, showThinned(view));
       send({ type: 'frame', id, bitmap, complete }, [bitmap]);
       view.lastFrame = performance.now();
     } catch {
@@ -147,15 +159,26 @@ function load(view: View, keys: TileKey[]) {
 }
 
 function start(request: RenderRequest) {
-  cancel();
   const { composition } = request;
   const coverage = limitedTileCover({ center: composition.geographicCenter,
-    widthPx: composition.widthPx, heightPx: composition.heightPx, rotationDegrees: composition.rotationDegrees,
+    // Coverage is in layer coordinates: turning the layer on the photo needs no additional tiles.
+    widthPx: composition.widthPx, heightPx: composition.heightPx, rotationDegrees: 0,
     metersPerImagePixel: composition.metersPerImagePixel,
     zoom: zoomFor(composition.metersPerImagePixel, composition.geographicCenter[1], composition.detailOffset, tileset.maxZoom),
   });
+  if (active && active.coverage.keys.length === coverage.keys.length) {
+    const previous = new Set(active.coverage.keys.map(tileId));
+    if (coverage.keys.every(key => previous.has(tileId(key)))) {
+      active.request = request;
+      active.coverage = coverage; // same set; priority order or the reduced-detail indicator may have changed
+      publish(active);
+      scheduleFrame(active);
+      return;
+    }
+  }
+  cancel();
   const view: View = { request, coverage, controller: new AbortController(),
-    loaded: new Map(), failed: new Set(), lastFrame: -Infinity };
+    loaded: new Map(), failed: new Set(), lastFrame: -Infinity, holdUntil: performance.now() + partialFrameHoldMs };
   active = view;
   const missing: TileKey[] = [];
   for (const key of coverage.keys) {

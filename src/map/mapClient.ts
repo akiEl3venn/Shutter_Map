@@ -72,7 +72,9 @@ export function createMapClient(callbacks: {
   function exportLayer(): Promise<ExportLayer> {
     const instance = worker;
     const view = current;
-    if (!instance || !view || pending) return Promise.reject(new Error('export-layer-unavailable'));
+    if (!instance || !view) return Promise.reject(new Error('export-layer-unavailable'));
+    // A cancelled download can still have a raster in flight. Its late reply is closed by ID.
+    rejectExport();
     const request: ExportLayerRequest = { type: 'export-layer', id: ++nextId, viewId: view.id };
     return new Promise((resolve, reject) => {
       pending = { id: request.id, composition: view.composition, resolve, reject };

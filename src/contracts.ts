@@ -72,6 +72,13 @@ export interface MapComposition {
   centerPx: readonly [ImagePixels, ImagePixels];
   widthPx: ImagePixels;
   heightPx: ImagePixels;
+  /** Symbol sizes follow this scale, independently of the width of a rectangular crop. */
+  scalePx: ImagePixels;
+  style: {
+    color: 'auto' | `#${string}`;
+    lineScale: number;
+    opacity: number;
+  };
   rotationDegrees: number;
   shape: 'circle' | 'square' | 'rectangle';
   /** Independent of layer size: one isotropic geographic scale for both axes. */

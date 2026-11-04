@@ -118,3 +118,40 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
   .sidebar { border-left: 0; border-top: 1px solid var(--line); padding: 1.25rem; }
   .empty-preview { inset: 1rem; padding: 1rem; }
 }
+
+.edit-panel { min-width: 0; font-size: 0.875rem; }
+.edit-panel details { border-bottom: 1px solid var(--line); }
+.edit-panel summary { padding: 0.8rem 0; cursor: pointer; color: var(--accent); font-weight: 650; }
+.edit-panel > button { margin-top: 1rem; }
+.edit-group, .edit-labels { display: grid; gap: 0.875rem; }
+.edit-group { padding: 0.25rem 0 1rem; }
+.edit-panel fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.edit-panel legend { margin-bottom: 0.4rem; padding: 0; }
+.edit-options label, .edit-check { display: inline-flex; align-items: center; gap: 0.375rem; min-height: 2rem; }
+.edit-options label { margin-right: 0.75rem; }
+.edit-panel input, .edit-panel select { accent-color: var(--accent); }
+.edit-panel :is(input, select, summary):focus-visible { outline: 2px solid #697f63; outline-offset: 2px; }
+.edit-panel input:is([type="radio"], [type="checkbox"]) { margin: 0; }
+.edit-anchors > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.edit-anchors button { min-height: 38px; padding: 0.25rem; border: 1px solid var(--line); background: #f4f5f0; color: var(--accent); }
+.edit-anchors button:hover { background: #e7ece3; }
+.edit-anchors button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.edit-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.75rem; }
+.edit-number { display: grid; gap: 0.25rem; min-width: 0; }
+.edit-number-box { display: flex; align-items: center; border: 1px solid #868d81; border-radius: 5px; padding-right: 0.45rem; }
+.edit-number-box:focus-within { outline: 2px solid #697f63; outline-offset: 2px; }
+.edit-number-box:has(input:disabled) { border-color: var(--line); background: #f4f4f1; }
+.edit-note { grid-column: 1 / -1; }
+.edit-number-box input { width: 0; min-width: 0; flex: 1; min-height: 38px; padding: 0.375rem; color: inherit; background: transparent; border: 0; }
+.edit-number-box input:focus-visible { outline: none; }
+.edit-number-box small { color: var(--muted); }
+.edit-range-pair > .edit-number { grid-template-columns: 1fr minmax(6rem, 47%); align-items: center; }
+.edit-range { display: grid; gap: 0.125rem; }
+.edit-range-name, .edit-color { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.edit-range-name span, .edit-color span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.edit-range input { width: 100%; min-width: 0; min-height: 26px; margin: 0; }
+.edit-zero { min-height: 32px; padding: 0.25rem 0.75rem; }
+.edit-color input { width: 3rem; min-height: 32px; background: transparent; border: 1px solid var(--line); }
+.edit-labels > label:first-child { display: flex; align-items: center; justify-content: space-between; }
+.edit-labels select { max-width: 100%; min-height: 38px; border: 1px solid #868d81; border-radius: 5px; padding: 0.25rem 0.5rem; font: inherit; }
+.edit-labels:disabled { color: var(--muted); opacity: 0.7; }

@@ -27,7 +27,7 @@ function compose({ photo, layer, composition, format }: ExportJob) {
   }
   ctx.drawImage(photo, 0, 0);
   photo.close();
-  drawOverlay(ctx, layer, composition);
+  drawOverlay(ctx, layer, composition, composition);
   layer.close();
   return { canvas, ctx };
 }

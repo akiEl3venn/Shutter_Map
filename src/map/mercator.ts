@@ -21,6 +21,17 @@ export function metersPerWorldUnit(latitude: number): number {
   return EARTH_CIRCUMFERENCE * Math.cos(clampLatitude(latitude) * Math.PI / 180);
 }
 
+export function worldToLonLat(x: number, y: number): [number, number] {
+  const longitude = wrap(x, 1) * 360 - 180;
+  const latitude = Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180 / Math.PI;
+  return [longitude, latitude];
+}
+
+/** At max zoom, large on-screen tiles leave enough space for the less prominent roads. */
+export function showsThinnedRoads(zoom: number, metersPerImagePixel: number, latitude: number, maxZoom: number): boolean {
+  return zoom >= maxZoom && metersPerWorldUnit(latitude) / metersPerImagePixel / 2 ** zoom > 1024;
+}
+
 export function zoomFor(metersPerImagePixel: number, latitude: number, detailOffset = 0, maxZoom = 14): number {
   return Math.max(0, Math.min(maxZoom,
     Math.floor(Math.log2(metersPerWorldUnit(latitude) / (metersPerImagePixel * SOURCE_PIXELS_PER_TILE))) + detailOffset));
