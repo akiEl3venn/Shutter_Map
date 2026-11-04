@@ -2,15 +2,17 @@ import type { MapComposition } from '../contracts.ts';
 import type { TileFeatures } from './decodeTile.ts';
 import { projectToLayer, rasterSize, tileTransform } from './layerGeometry.ts';
 import { isAreaName, labelStyle, layoutLabels, markFocus, selectLabelName, type LabelCandidate } from './labels.ts';
-import { circleFeather, fadeBand, fadeStops, focusColor, haloFor, layerLook, lineWidths, sideFeather } from './style.ts';
-import { thinRoads } from './thinRoads.ts';
+import { circleFeather, fadeBand, fadeStops, focusColor, haloFor, layerLook, lineWidths, roadSpacing, sideFeather } from './style.ts';
+import { roadTiers, TIER_COUNT, tierLimit, type PlacedRoad } from './thinRoads.ts';
 
 const strokeOrder = ['water', 'hiking', 'all', 'standard', 'major'] as const;
 type StrokeLayer = typeof strokeOrder[number];
 
 /** Geometry lives only in the paths: up to 200 cached tiles should not also keep their coordinate arrays. */
 export interface PreparedTile extends Pick<TileFeatures, 'key' | 'extent' | 'places'> {
-  paths: Record<StrokeLayer | 'thinnedAll' | 'thinnedHiking', Path2D>;
+  paths: Record<'water' | 'standard' | 'major', Path2D>;
+  /** One path per thinning tier, coarse to fine. */
+  tiers: Record<'streets' | 'lanes' | 'trails', Path2D[]>;
 }
 
 function addLine(path: Path2D, points: number[], closed = false) {
@@ -22,33 +24,36 @@ function addLine(path: Path2D, points: number[], closed = false) {
 
 /** Paths stay in tile coordinates and can be reused at any output resolution. */
 export function prepareTile(features: TileFeatures): PreparedTile {
-  const paths = {
-    water: new Path2D(), hiking: new Path2D(),
-    all: new Path2D(), standard: new Path2D(), major: new Path2D(),
-    thinnedAll: new Path2D(), thinnedHiking: new Path2D(),
-  };
+  const paths = { water: new Path2D(), standard: new Path2D(), major: new Path2D() };
+  const paths2D = () => Array.from({ length: TIER_COUNT }, () => new Path2D());
+  const tiers = { streets: paths2D(), lanes: paths2D(), trails: paths2D() };
   for (const polygon of features.water.polygons) {
     for (const ring of polygon) addLine(paths.water, ring, true);
   }
   for (const line of features.water.lines) addLine(paths.water, line);
-  const claimed: number[][] = [];
+  const placed: PlacedRoad[] = [];
   for (const { kind, line } of features.roads) {
     if (kind === 'all') continue;
     addLine(paths[kind], line);
-    claimed.push(line);
+    placed.push({ line, tier: 0 });
   }
   const local = features.roads.filter(({ kind }) => kind === 'all');
-  const kept = new Set(thinRoads(local, claimed, features.extent));
-  // Preserve the original stroke order and let only retained streets claim cells before hiking.
-  for (const { line } of kept) {
-    addLine(paths.all, line);
-    claimed.push(line);
-  }
-  for (const road of local) if (!kept.has(road)) addLine(paths.thinnedAll, road.line);
-  const keptHiking = new Set(thinRoads(features.hiking, claimed, features.extent));
-  for (const { line } of keptHiking) addLine(paths.hiking, line);
-  for (const trail of features.hiking) if (!keptHiking.has(trail)) addLine(paths.thinnedHiking, trail.line);
-  return { key: features.key, extent: features.extent, places: features.places, paths };
+  roadTiers(local, placed, features.extent).forEach((tier, i) => {
+    const { line, minor } = local[i]!;
+    addLine((minor ? tiers.lanes : tiers.streets)[tier]!, line);
+    placed.push({ line, tier });
+  });
+  // Trails only claim what is left after every road, so turning them on never changes the roads.
+  roadTiers(features.hiking, placed, features.extent).forEach((tier, i) => addLine(tiers.trails[tier]!, features.hiking[i]!.line));
+  return { key: features.key, extent: features.extent, places: features.places, paths, tiers };
+}
+
+/** The paths a stroke class draws from one tile at this detail level. */
+function pathsToDraw({ paths, tiers }: PreparedTile, layer: StrokeLayer, spacing: ReturnType<typeof roadSpacing>, tileSpanPx: number): Path2D[] {
+  const upTo = (tiered: Path2D[], px: number | null) => tiered.slice(0, tierLimit(px, tileSpanPx) + 1);
+  if (layer === 'hiking') return upTo(tiers.trails, spacing.trails);
+  if (layer === 'all') return [...upTo(tiers.streets, spacing.streets), ...upTo(tiers.lanes, spacing.lanes)];
+  return [paths[layer]];
 }
 
 const font = (px: number) => `600 ${px}px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif`;
@@ -146,7 +151,7 @@ function applyFade(ctx: OffscreenCanvasRenderingContext2D, composition: MapCompo
 
 /** Draw an isolated transparent map. Pass outputScale=1 for source resolution. */
 export function renderLayer(tiles: readonly PreparedTile[], composition: MapComposition,
-  outputScale: number, lineColor: string, complete: boolean, showThinned: boolean): ImageBitmap {
+  outputScale: number, lineColor: string, complete: boolean): ImageBitmap {
   const [rasterWidth, rasterHeight] = rasterSize(composition, outputScale);
   const width = composition.widthPx * outputScale, height = composition.heightPx * outputScale;
   const canvas = new OffscreenCanvas(rasterWidth, rasterHeight);
@@ -158,9 +163,8 @@ export function renderLayer(tiles: readonly PreparedTile[], composition: MapComp
   layerCtx.lineCap = 'round';
   layerCtx.lineJoin = 'round';
   const widths = lineWidths(composition.scalePx, composition.style.lineScale);
-  const positioned = tiles.map(({ key, extent, paths }) => ({
-    paths, ...tileTransform(key, extent, composition, outputScale),
-  }));
+  const spacing = roadSpacing(composition.detailOffset, composition.scalePx);
+  const positioned = tiles.map(tile => ({ tile, ...tileTransform(tile.key, tile.extent, composition, outputScale) }));
   const angle = composition.rotationDegrees * Math.PI / 180;
   // Clip the completed strokes, rather than the individual tile paths. On wide paths a curved clip can
   // change how Canvas tessellates a stroke well inside the circle. The final clip preserves its pixels.
@@ -182,7 +186,7 @@ export function renderLayer(tiles: readonly PreparedTile[], composition: MapComp
     layerCtx.translate(rasterWidth / 2, rasterHeight / 2);
     layerCtx.rotate(angle);
     layerCtx.translate(-width / 2, -height / 2);
-    for (const { paths, matrix, clip } of positioned) {
+    for (const { tile, matrix, clip } of positioned) {
       layerCtx.save();
       // Clip the encoded buffer, leaving one output pixel of overlap at tile seams.
       layerCtx.beginPath();
@@ -190,9 +194,7 @@ export function renderLayer(tiles: readonly PreparedTile[], composition: MapComp
       layerCtx.clip();
       layerCtx.transform(...matrix);
       layerCtx.lineWidth = widths[layer] * outputScale / matrix[0];
-      layerCtx.stroke(paths[layer]);
-      if (showThinned && layer === 'all') layerCtx.stroke(paths.thinnedAll);
-      if (showThinned && layer === 'hiking') layerCtx.stroke(paths.thinnedHiking);
+      for (const path of pathsToDraw(tile, layer, spacing, clip.width / outputScale)) layerCtx.stroke(path);
       layerCtx.restore();
     }
     applyFade(layerCtx, composition, layer, width, height, outputScale);

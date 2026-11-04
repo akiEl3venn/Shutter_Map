@@ -2,7 +2,7 @@
 import type { TileKey } from '../contracts.ts';
 import { decodeTile } from './decodeTile.ts';
 import type { TileFeatures } from './decodeTile.ts';
-import { limitedTileCover, showsThinnedRoads, zoomFor } from './mercator.ts';
+import { limitedTileCover, zoomFor } from './mercator.ts';
 import type { TileCoverage } from './mercator.ts';
 import type { ExportLayerRequest, MapWorkerRequest, MapWorkerResponse, RenderRequest } from './mapProtocol.ts';
 import { prepareTile, renderLayer } from './renderLayer.ts';
@@ -82,18 +82,12 @@ function exportLayer({ id, viewId }: ExportLayerRequest) {
       throw new Error('view-not-ready');
     }
     const { composition, lineColor } = view.request;
-    bitmap = renderLayer(tilesOf(view), composition, 1, lineColor, true, showThinned(view));
+    bitmap = renderLayer(tilesOf(view), composition, 1, lineColor, true);
     send({ type: 'export-layer', id, bitmap }, [bitmap]);
   } catch {
     bitmap?.close();
     send({ type: 'export-layer-failed', id });
   }
-}
-
-function showThinned({ coverage, request: { composition } }: View) {
-  // "Less detail" must stay less, even where the deepest tiles are blown up.
-  return composition.detailOffset >= 0
-    && showsThinnedRoads(coverage.zoom, composition.metersPerImagePixel, composition.geographicCenter[1], tileset.maxZoom);
 }
 
 function scheduleFrame(view: View) {
@@ -110,7 +104,7 @@ function scheduleFrame(view: View) {
     const complete = view.loaded.size === view.coverage.keys.length;
     let bitmap: ImageBitmap | undefined;
     try {
-      bitmap = renderLayer(tilesOf(view), composition, outputScale, lineColor, complete, showThinned(view));
+      bitmap = renderLayer(tilesOf(view), composition, outputScale, lineColor, complete);
       send({ type: 'frame', id, bitmap, complete }, [bitmap]);
       view.lastFrame = performance.now();
     } catch {

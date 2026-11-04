@@ -1,4 +1,4 @@
-import type { MapComposition, RoadKind } from '../contracts.ts';
+import type { DetailOffset, MapComposition, RoadKind } from '../contracts.ts';
 
 export function lineColorFor(meanLuminance: number): string {
   return meanLuminance > 0.55 ? '#1a1a1a' : '#ffffff';
@@ -22,6 +22,23 @@ export const fadeStops = [[0, 1], [0.25, 0.84], [0.5, 0.5], [0.75, 0.16], [1, 0]
 export function lineWidths(scalePx: number, lineScale = 1): Record<RoadKind | 'water' | 'hiking', number> {
   const u = scalePx / 2400 * lineScale;
   return { major: 4 * u, standard: 2.6 * u, all: 1.6 * u, water: 2.2 * u, hiking: 1.2 * u };
+}
+
+/**
+ * What each detail level draws besides main roads: the least spacing between roads, in the same unit as line widths, so
+ * a level looks the same at any photo size and range. Null leaves the class out; 0 draws all of it, however crowded.
+ */
+const detailSpacing: Record<DetailOffset, Record<'streets' | 'lanes' | 'trails', number | null>> = {
+  [-1]: { streets: null, lanes: null, trails: 12 },
+  0: { streets: 12, lanes: null, trails: 12 },
+  1: { streets: 6, lanes: 12, trails: 6 },
+  2: { streets: 0, lanes: 0, trails: 0 },
+};
+
+export function roadSpacing(detail: DetailOffset, scalePx: number) {
+  const inPixels = (units: number | null) => units === null ? null : units * scalePx / 2400;
+  const { streets, lanes, trails } = detailSpacing[detail];
+  return { streets: inPixels(streets), lanes: inPixels(lanes), trails: inPixels(trails) };
 }
 
 /** Distances from the edge where an individual stroke class starts and finishes fading. */

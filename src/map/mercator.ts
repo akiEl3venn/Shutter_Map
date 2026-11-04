@@ -27,14 +27,10 @@ export function worldToLonLat(x: number, y: number): [number, number] {
   return [longitude, latitude];
 }
 
-/** At max zoom, large on-screen tiles leave enough space for the less prominent roads. */
-export function showsThinnedRoads(zoom: number, metersPerImagePixel: number, latitude: number, maxZoom: number): boolean {
-  return zoom >= maxZoom && metersPerWorldUnit(latitude) / metersPerImagePixel / 2 ** zoom > 1024;
-}
-
+/** Higher detail reads deeper tiles. Lower detail only leaves roads out, so it keeps the tiles and their landmarks. */
 export function zoomFor(metersPerImagePixel: number, latitude: number, detailOffset = 0, maxZoom = 14): number {
   return Math.max(0, Math.min(maxZoom,
-    Math.floor(Math.log2(metersPerWorldUnit(latitude) / (metersPerImagePixel * SOURCE_PIXELS_PER_TILE))) + detailOffset));
+    Math.floor(Math.log2(metersPerWorldUnit(latitude) / (metersPerImagePixel * SOURCE_PIXELS_PER_TILE))) + Math.max(0, detailOffset)));
 }
 
 export interface CoverInput {
