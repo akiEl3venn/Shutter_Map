@@ -30,6 +30,9 @@ export function fadeBand(layer: keyof typeof layerLook, featherPx: number) {
   return { start: (1 - inner) * featherPx, end: (1 - outer) * featherPx };
 }
 
+/** Landmark buildings stand out from the roads, whatever color those are. */
+export const landmarkColor = '#e5281f';
+
 export function haloFor(color: string): string {
   const rgb = Number.parseInt(color.slice(1), 16);
   const brightness = (0.2126 * (rgb >> 16) + 0.7152 * ((rgb >> 8) & 255) + 0.0722 * (rgb & 255)) / 255;
