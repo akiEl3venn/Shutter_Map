@@ -22,7 +22,8 @@ export type EditAction =
   | { type: 'size' | 'width' | 'height' | 'rotation' | 'range' | 'circleFeather' |
       'lineScale' | 'opacity' | 'maxCount'; value: number }
   | { type: 'shape'; value: MapComposition['shape'] }
-  | { type: 'sideFeather'; value: Sides }
+  | { type: 'sideFeather'; side: 0 | 1 | 2 | 3; value: number }
+  | { type: 'allFeather'; value: number }
   | { type: 'color'; value: MapComposition['style']['color'] }
   | { type: 'layer'; layer: LayerId; value: boolean }
   | { type: 'detail'; value: DetailOffset }
@@ -82,8 +83,20 @@ function resized(c: MapComposition, width: number, min: number, max: number): Ma
   const scaleSides = ([t, r, b, l]: Sides): Sides => [t * factor, r * factor, b * factor, l * factor];
   return { ...c, widthPx, heightPx, scalePx: c.scalePx * factor,
     metersPerImagePixel: c.metersPerImagePixel / factor,
-    feather: { circlePx: c.feather.circlePx * factor, squarePx: scaleSides(c.feather.squarePx),
+    feather: { ...c.feather, circlePx: c.feather.circlePx * factor, squarePx: scaleSides(c.feather.squarePx),
       rectanglePx: scaleSides(c.feather.rectanglePx) } };
+}
+
+/**
+ * In a photo's corner, the two sides along its edges stay hard: fading them would float the map off the edge. These are
+ * the layer's own sides, top first, so a quarter turn moves them round. Any other angle has no side along an edge.
+ */
+export function cornerSides(anchor: Anchor | null, rotationDegrees: number): MapComposition['feather']['hardSides'] {
+  if (!anchor || anchor[0] === 1 || anchor[1] === 1 || rotationDegrees % 90 !== 0) return [false, false, false, false];
+  const photoSides = [anchor[1] === 0, anchor[0] === 2, anchor[1] === 2, anchor[0] === 0];
+  const turns = (rotationDegrees / 90 % 4 + 4) % 4;
+  const side = (i: number) => photoSides[(i + turns) % 4]!;
+  return [side(0), side(1), side(2), side(3)];
 }
 
 export function editComposition(state: EditorState, action: EditAction, photo: PhotoSize): EditorState {
@@ -128,10 +141,19 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     case 'sideFeather': {
       if (c.shape === 'circle') return state;
       const key = c.shape === 'square' ? 'squarePx' : 'rectanglePx';
-      // A crop may currently hide part of another edge's feather. Editing one side must not erase that width.
-      const side = (i: number) => action.value[i] === c.feather[key][i] ? action.value[i]
-        : clamp(action.value[i], 0, (i % 2 ? c.widthPx : c.heightPx) / 2);
-      c = { ...c, feather: { ...c.feather, [key]: [side(0), side(1), side(2), side(3)] } };
+      const { side, value } = action;
+      const widths = [...c.feather[key]] as [number, number, number, number];
+      widths[side] = clamp(value, 0, (side % 2 ? c.widthPx : c.heightPx) / 2);
+      const hardSides = [...c.feather.hardSides] as [boolean, boolean, boolean, boolean];
+      hardSides[side] = false; // Asking for a fade on this side overrides the corner's default.
+      c = { ...c, feather: { ...c.feather, [key]: widths, hardSides } };
+      break;
+    }
+    case 'allFeather': {
+      if (c.shape === 'circle') return state;
+      const key = c.shape === 'square' ? 'squarePx' : 'rectanglePx';
+      const width = clamp(action.value, 0, Math.min(c.widthPx, c.heightPx) / 2);
+      c = { ...c, feather: { ...c.feather, [key]: [width, width, width, width] } };
       break;
     }
     case 'color': c = { ...c, style: { ...c.style, color: action.value } }; break;
@@ -144,6 +166,9 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     case 'maxCount': c = { ...c, labels: { ...c.labels, maxCount: clamp(Math.round(action.value), 0, MAX_LABELS) } }; break;
   }
 
+  if (action.type === 'anchor' || action.type === 'center' || action.type === 'rotation' || action.type === 'shape') {
+    c = { ...c, feather: { ...c.feather, hardSides: cornerSides(anchor, c.rotationDegrees) } };
+  }
   const center = anchor ? anchoredCenter(anchor, marginPx, photo, c) : c.centerPx;
   const [x, y] = snapCenter([clamp(center[0], 0, photo.widthPx), clamp(center[1], 0, photo.heightPx)], c);
   const axis = (snapped: number, target: number, dimension: number) => {

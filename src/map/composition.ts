@@ -29,6 +29,7 @@ export function defaultComposition(
       squarePx: [size / 2, size / 2, size / 2, size / 2],
       // A quarter of the width is half the height of the default 18:9 rectangle: a full fade from its short side.
       rectanglePx: [size / 4, size / 4, size / 4, size / 4],
+      hardSides: [false, false, false, false],
     },
   };
 }

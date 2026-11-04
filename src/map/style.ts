@@ -44,6 +44,7 @@ export const circleFeather = (c: MapComposition) => Math.min(c.feather.circlePx,
 
 export function sideFeather(c: MapComposition): [number, number, number, number] {
   const [top, right, bottom, left] = c.shape === 'square' ? c.feather.squarePx : c.feather.rectanglePx;
-  return [Math.min(top, c.heightPx / 2), Math.min(right, c.widthPx / 2),
-    Math.min(bottom, c.heightPx / 2), Math.min(left, c.widthPx / 2)];
+  const [hardTop, hardRight, hardBottom, hardLeft] = c.feather.hardSides;
+  return [hardTop ? 0 : Math.min(top, c.heightPx / 2), hardRight ? 0 : Math.min(right, c.widthPx / 2),
+    hardBottom ? 0 : Math.min(bottom, c.heightPx / 2), hardLeft ? 0 : Math.min(left, c.widthPx / 2)];
 }

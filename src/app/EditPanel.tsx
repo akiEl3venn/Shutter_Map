@@ -162,10 +162,7 @@ function Shape({ c, edit }: { c: MapComposition; edit: Edit }) {
   const shortHalf = Math.min(half[0], half[1]);
   const together = c.shape !== 'circle' && linked[c.shape] && saved.every(value => Math.abs(value - saved[0]) < 1e-6);
   const percentTogether = Math.min(saved[0], shortHalf) / shortHalf * 100;
-  const changeTogether = (n: number) => {
-    const width = shortHalf * n / 100;
-    edit({ type: 'sideFeather', value: [width, width, width, width] });
-  };
+  const changeTogether = (n: number) => edit({ type: 'allFeather', value: shortHalf * n / 100 });
   return <Group title={s.editShape}>
     <Radios<MapComposition['shape']> title={s.shape} value={c.shape} change={value => edit({ type: 'shape', value })}
       options={[[ 'circle', s.shapeCircle ], [ 'square', s.shapeSquare ], [ 'rectangle', s.shapeRectangle ]]} />
@@ -177,11 +174,9 @@ function Shape({ c, edit }: { c: MapComposition; edit: Edit }) {
         if (together) changeTogether(percentTogether);
       }} />{s.featherLinked}</label>
       {together ? <FeatherSlider label={s.feather} percent={percentTogether} change={changeTogether} />
-        : featherNames.map((name, i) => <FeatherSlider key={name} label={name} percent={percent[i]} change={n => {
-          const next: FourSides = [...(c.shape === 'square' ? c.feather.squarePx : c.feather.rectanglePx)];
-          next[i] = half[i] * n / 100;
-          edit({ type: 'sideFeather', value: next });
-        }} />)}
+        : featherNames.map((name, i) => <FeatherSlider key={name} label={name} percent={percent[i]}
+          change={n => edit({ type: 'sideFeather', side: i as 0 | 1 | 2 | 3, value: half[i] * n / 100 })} />)}
+      {together && c.feather.hardSides.some(Boolean) && <p className="muted">{s.featherCornerNote}</p>}
     </>}
   </Group>;
 }

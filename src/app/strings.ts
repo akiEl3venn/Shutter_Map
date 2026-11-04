@@ -65,6 +65,7 @@ export const strings = {
   layerSize: '大小', layerWidth: '宽', layerHeight: '高', geoRange: '地理范围', rotation: '旋转', rotationReset: '归零',
   shape: '形状', shapeCircle: '圆形', shapeSquare: '方形', shapeRectangle: '矩形',
   feather: '羽化', featherHard: '硬边', featherLinked: '四边一起调',
+  featherCornerNote: '贴着照片边缘的两边默认不羽化。取消“四边一起调”可以单独调整。',
   featherTop: '上', featherRight: '右', featherBottom: '下', featherLeft: '左',
   lineColor: '颜色', colorAuto: '自动', colorCustom: '自选', lineWidth: '线宽', opacity: '不透明度',
   layerRoads: '道路', layerHiking: '徒步路径', layerWater: '水体', layerPlaces: '地名地标',

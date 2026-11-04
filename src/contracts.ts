@@ -97,6 +97,8 @@ export interface MapComposition {
     circlePx: ImagePixels;
     squarePx: readonly [top: ImagePixels, right: ImagePixels, bottom: ImagePixels, left: ImagePixels];
     rectanglePx: readonly [top: ImagePixels, right: ImagePixels, bottom: ImagePixels, left: ImagePixels];
+    /** Sides left hard for now, whatever their saved width, because they rest against the photo's own edge. */
+    hardSides: readonly [top: boolean, right: boolean, bottom: boolean, left: boolean];
   };
 }
 
