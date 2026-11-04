@@ -11,6 +11,8 @@ export interface EditorState {
   composition: MapComposition;
   anchor: Anchor | null;
   marginPx: Point;
+  /** Height over width, so a rectangle returns with its own proportions after visiting another shape. */
+  rectangleAspect: number;
 }
 
 export type EditAction =
@@ -37,7 +39,7 @@ export function createEditorState(photo: PhotoSize, coordinate: LonLat): EditorS
   const composition = defaultComposition(
     { orientedWidthPx: photo.widthPx, orientedHeightPx: photo.heightPx }, { coordinate },
   )!;
-  return { composition, anchor: [1, 1], marginPx: [0, 0] };
+  return { composition, anchor: [1, 1], marginPx: [0, 0], rectangleAspect: 2 / 3 };
 }
 
 export function anchoredCenter(anchor: Anchor, margin: Point, photo: PhotoSize, c: MapComposition): [number, number] {
@@ -84,7 +86,7 @@ function resized(c: MapComposition, width: number, min: number, max: number): Ma
 }
 
 export function editComposition(state: EditorState, action: EditAction, photo: PhotoSize): EditorState {
-  let { composition: c, anchor, marginPx } = state;
+  let { composition: c, anchor, marginPx, rectangleAspect } = state;
   const max = Math.max(photo.widthPx, photo.heightPx), min = Math.min(MIN_LAYER_PX, max);
   // Restrict the crop itself when it reaches a km limit, preserving geographic scale and stroke sizes.
   const cropWidth = (w: number) => Math.round(clamp(w, Math.max(min, MIN_RANGE_KM * 1000 / c.metersPerImagePixel),
@@ -106,9 +108,10 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
       c = { ...c, heightPx: Math.round(clamp(action.value, min, max)) }; break;
     case 'shape': {
       if (c.shape === action.value) return state;
-      const widthPx = c.shape === 'rectangle' ? cropWidth(Math.min(c.widthPx, c.heightPx)) : c.widthPx;
-      const heightPx = action.value === 'rectangle' ? clamp(Math.round(widthPx * 2 / 3), min, max) : widthPx;
-      c = { ...c, shape: action.value, widthPx, heightPx }; break;
+      // The width carries across shapes, so the layer and its geographic range never shrink by switching.
+      if (c.shape === 'rectangle') rectangleAspect = c.heightPx / c.widthPx;
+      const heightPx = action.value === 'rectangle' ? clamp(Math.round(c.widthPx * rectangleAspect), min, max) : c.widthPx;
+      c = { ...c, shape: action.value, heightPx }; break;
     }
     case 'rotation': {
       let degrees = action.value % 360;
@@ -148,5 +151,5 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     return snapped > dimension ? snapped - 1 : snapped;
   };
   const centerPx: Point = [axis(x, center[0], photo.widthPx), axis(y, center[1], photo.heightPx)];
-  return { composition: { ...c, centerPx }, anchor, marginPx };
+  return { composition: { ...c, centerPx }, anchor, marginPx, rectangleAspect };
 }
