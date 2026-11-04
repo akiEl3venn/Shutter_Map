@@ -2,7 +2,7 @@ import type { MapComposition } from '../contracts.ts';
 import type { TileFeatures } from './decodeTile.ts';
 import { projectToLayer, rasterSize, tileTransform } from './layerGeometry.ts';
 import { isAreaName, labelStyle, layoutLabels, markFocus, selectLabelName, type LabelCandidate } from './labels.ts';
-import { circleFeather, fadeBand, fadeStops, focusColor, haloFor, layerLook, lineWidths, roadSpacing, sideFeather } from './style.ts';
+import { circleFeather, fadeBand, fadeStops, focusColor, focusHalo, haloFor, layerLook, lineWidths, roadSpacing, sideFeather } from './style.ts';
 import { roadTiers, TIER_COUNT, tierLimit, type PlacedRoad } from './thinRoads.ts';
 
 const strokeOrder = ['water', 'hiking', 'all', 'standard', 'major'] as const;
@@ -102,9 +102,8 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
   ctx.lineWidth = labelStyle.halo * u;
   ctx.lineJoin = 'round';
   for (const label of labels) {
-    const color = label.focus ? focusColor : lineColor;
-    ctx.strokeStyle = haloFor(color);
-    ctx.fillStyle = color;
+    ctx.strokeStyle = label.focus ? focusHalo : haloFor(lineColor);
+    ctx.fillStyle = label.focus ? focusColor : lineColor;
     if (label.marker) {
       ctx.beginPath();
       ctx.arc(label.x, label.y, labelStyle.markerRadius * u, 0, 2 * Math.PI);

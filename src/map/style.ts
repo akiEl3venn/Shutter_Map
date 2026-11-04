@@ -49,6 +49,7 @@ export function fadeBand(layer: keyof typeof layerLook, featherPx: number) {
 
 /** The one landmark the map is about stands out from the roads, whatever color those are. */
 export const focusColor = '#e5281f';
+export const focusHalo = 'rgba(0,0,0,0.75)';
 
 export function haloFor(color: string): string {
   const rgb = Number.parseInt(color.slice(1), 16);
