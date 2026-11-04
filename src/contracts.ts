@@ -7,7 +7,7 @@ export type LayerId = 'roads' | 'hiking' | 'water' | 'places';
 /** `roads.kind`; must match classifyRoad().detail in src/map/roadClass.ts. */
 export type RoadKind = 'major' | 'standard' | 'all';
 export type PlaceKind = 'city' | 'town' | 'village' | 'peak' | 'landmark';
-export type LabelLanguage = 'local' | 'en' | 'zh';
+export type LabelLanguage = 'local' | 'en' | 'zh' | 'ja';
 /** A tile absent from the archive is `ready` with no features, not an error. */
 export type TileState = 'loading' | 'ready' | 'failed';
 export type DetailOffset = -1 | 0 | 1 | 2;

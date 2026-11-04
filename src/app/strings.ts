@@ -30,6 +30,7 @@ export const strings = {
   restorePhotoLocation: '恢复照片位置',
   geoAttribution: '地名数据：GeoNames（CC BY 4.0）',
   mapWaiting: '选择照片和位置后加载地图数据',
+  mapStarting: '正在加载地图数据…',
   mapReady: '地图数据已就绪',
   mapNoData: '这个位置暂无地图数据',
   mapReduced: '已自动降低细节',
@@ -37,6 +38,8 @@ export const strings = {
   mapDebug: (zoom: number, total: number, bytes: number, empty: number) =>
     `开发信息：z${zoom} · ${total} 块瓦片 · ${(bytes / 1_000_000).toFixed(2)} MB（解压后）· ${empty} 块无数据`,
   mapFailed: '部分地图数据加载失败',
+  mapRenderFailed: '地图线稿绘制失败',
+  mapRenderRetry: '重新绘制地图线稿',
   mapRetry: '重试失败的地图瓦片',
   mapAttribution: '地图数据：© OpenStreetMap contributors（ODbL）',
   geoLoading: '正在加载地名数据…',

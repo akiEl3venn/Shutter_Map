@@ -2,7 +2,7 @@ import type { LocationChoice, MapComposition, PhotoSession } from '../contracts.
 
 export function defaultComposition(
   photo: Pick<PhotoSession, 'orientedWidthPx' | 'orientedHeightPx'> | null,
-  location: LocationChoice | null,
+  location: Pick<LocationChoice, 'coordinate'> | null,
 ): MapComposition | null {
   if (!photo || !location) return null;
   const size = Math.min(photo.orientedWidthPx, photo.orientedHeightPx) * 0.6;

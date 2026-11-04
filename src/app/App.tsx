@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import type { LocationChoice, PhotoSession, TileKey } from '../contracts.ts';
+import type { LocationChoice, PhotoSession } from '../contracts.ts';
 import { toLonLat } from '../location/gps.ts';
 import { readExif } from '../photo/exif.ts';
 import { loadPhoto } from '../photo/loadPhoto.ts';
@@ -13,58 +13,8 @@ import { pathForPlace } from '../search/cascade.ts';
 import type { CountrySummary, RegionSelection } from '../search/cascade.ts';
 import { prepareIndexInChunks } from '../search/match.ts';
 import type { CountryData, SearchIndex } from '../search/match.ts';
-import { defaultComposition } from '../map/composition.ts';
-import { limitedTileCover, zoomFor } from '../map/mercator.ts';
-import type { TileCoverage } from '../map/mercator.ts';
-import { createTileLoader } from '../map/tileLoader.ts';
-import { decodeTile } from '../map/decodeTile.ts';
-import type { TileFeatures } from '../map/decodeTile.ts';
-import { tileset, tileUrl } from '../map/tileset.ts';
-
-interface MapData {
-  coverage: TileCoverage;
-  features: Record<string, TileFeatures>;
-  loaded: number;
-  empty: number;
-  failed: number;
-  bytes: number;
-  loading: boolean;
-}
-
-function PhotoCanvas({ preview }: { preview: ImageBitmap | null }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const draw = () => {
-      const { width, height } = canvas.getBoundingClientRect();
-      if (!width || !height) return;
-      const ratio = window.devicePixelRatio || 1;
-      canvas.width = Math.max(1, Math.round(width * ratio));
-      canvas.height = Math.max(1, Math.round(height * ratio));
-      const context = canvas.getContext('2d');
-      if (!context || !preview) return;
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = 'high';
-      const scale = Math.min(width / preview.width, height / preview.height);
-      const drawWidth = preview.width * scale;
-      const drawHeight = preview.height * scale;
-      context.drawImage(preview, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
-    };
-    const observer = new ResizeObserver(draw);
-    observer.observe(canvas);
-    window.addEventListener('resize', draw);
-    draw();
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', draw);
-    };
-  }, [preview]);
-
-  return <canvas ref={canvasRef} aria-label={strings.previewLabel} role="img">{strings.canvasFallback}</canvas>;
-}
+import { PhotoCanvas } from './PhotoCanvas.tsx';
+import { useMapPreview } from './useMapPreview.ts';
 
 export function App() {
   const [photo, setPhoto] = useState<PhotoSession | null>(null);
@@ -85,75 +35,7 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(0);
   const dragDepth = useRef(0);
-  const [tileLoader] = useState(() => createTileLoader({ url: key => tileUrl(key.z, key.x, key.y) }));
-  const [mapData, setMapData] = useState<MapData | null>(null);
-  const retryTiles = useRef<() => void>(() => {});
-  const composition = useMemo(() => defaultComposition(photo, location), [photo, location]);
-
-  useEffect(() => {
-    if (!composition) {
-      setMapData(null);
-      retryTiles.current = () => {};
-      return;
-    }
-    const controller = new AbortController();
-    const coverage = limitedTileCover({
-      center: composition.geographicCenter,
-      widthPx: composition.widthPx,
-      heightPx: composition.heightPx,
-      rotationDegrees: composition.rotationDegrees,
-      metersPerImagePixel: composition.metersPerImagePixel,
-      zoom: zoomFor(composition.metersPerImagePixel, composition.geographicCenter[1], composition.detailOffset, tileset.maxZoom),
-    });
-    const features: Record<string, TileFeatures> = {};
-    const completed = new Map<string, { key: TileKey; status: 'ready' | 'empty' | 'failed'; bytes: number }>();
-    let busy = false;
-    function publish() {
-      if (controller.signal.aborted) return;
-      const results = [...completed.values()];
-      setMapData({ coverage, features: { ...features }, loading: busy,
-        loaded: results.filter(result => result.status !== 'failed').length,
-        empty: results.filter(result => result.status === 'empty').length,
-        failed: results.filter(result => result.status === 'failed').length,
-        bytes: results.reduce((sum, result) => sum + result.bytes, 0),
-      });
-    }
-    async function load(keys: TileKey[]) {
-      if (busy || controller.signal.aborted) return;
-      busy = true;
-      publish();
-      await tileLoader.load(keys, result => {
-        if (controller.signal.aborted) return;
-        const id = `${result.key.z}/${result.key.x}/${result.key.y}`;
-        let status = result.status;
-        let bytes = 0;
-        if (result.status === 'ready') {
-          try {
-            features[id] = decodeTile(result.bytes, result.key);
-            bytes = result.bytes.byteLength;
-          } catch {
-            status = 'failed';
-            tileLoader.invalidate(result.key);
-          }
-        }
-        completed.set(id, { key: result.key, status, bytes });
-        publish();
-      }, controller.signal);
-      busy = false;
-      publish();
-    }
-    retryTiles.current = () => {
-      const failed = new Set([...completed.values()].filter(result => result.status === 'failed')
-        .map(result => `${result.key.z}/${result.key.x}/${result.key.y}`));
-      // Retain the original near-to-far order and leave successful/empty tiles alone.
-      void load(coverage.keys.filter(key => failed.has(`${key.z}/${key.x}/${key.y}`)));
-    };
-    void load(coverage.keys);
-    return () => {
-      controller.abort();
-      retryTiles.current = () => {};
-    };
-  }, [composition, tileLoader]);
+  const map = useMapPreview(photo, preview, location);
 
   // Release a bitmap only after React has committed its replacement, so no draw can see it closed.
   useEffect(() => () => preview?.close(), [preview]);
@@ -298,7 +180,7 @@ export function App() {
         }} />
       <div className="workspace" aria-busy={loading}>
         <section className="preview-area" aria-label={strings.previewLabel}>
-          <PhotoCanvas preview={preview} />
+          <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} />
           {!photo && <div className="empty-preview">
             <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
             <p>{strings.dropHint}</p><p className="muted">{strings.formatHint}</p>
@@ -346,20 +228,21 @@ export function App() {
             <p className="muted geo-attribution">{strings.geoAttribution}</p>
             <div className="map-data">
               <p role="status" aria-live="polite">
-                {!mapData ? strings.mapWaiting
-                  : mapData.loading ? strings.mapProgress(mapData.loaded, mapData.coverage.keys.length)
-                  : mapData.failed > 0 ? null
-                  : mapData.empty === mapData.coverage.keys.length ? strings.mapNoData
+                {map.crashed ? null
+                  : map.rendering ? (map.progress ? strings.mapProgress(map.progress.loaded, map.progress.total) : strings.mapStarting)
+                  : !map.progress ? strings.mapWaiting
+                  : map.progress.failed > 0 ? null
+                  : map.progress.empty === map.progress.total ? strings.mapNoData
                   : strings.mapReady}
-                {mapData?.coverage.detailReduced && ` · ${strings.mapReduced}`}
+                {map.progress?.detailReduced && ` · ${strings.mapReduced}`}
               </p>
-              {import.meta.env.DEV && mapData !== null && <p className="muted">
-                {strings.mapDebug(mapData.coverage.zoom, mapData.coverage.keys.length, mapData.bytes, mapData.empty)}
+              {import.meta.env.DEV && map.progress && <p className="muted">
+                {strings.mapDebug(map.progress.zoom, map.progress.total, map.progress.bytes, map.progress.empty)}
               </p>}
-              {mapData !== null && mapData.failed > 0 && !mapData.loading && <div className="map-failure">
-                <p className="error">{strings.mapFailed}</p>
+              {(map.crashed || (map.progress && map.progress.failed > 0 && !map.rendering)) && <div className="map-failure">
+                <p className="error" role="alert">{map.crashed ? strings.mapRenderFailed : strings.mapFailed}</p>
                 <button type="button" className="secondary"
-                  aria-label={strings.mapRetry} onClick={() => retryTiles.current()}>{strings.retry}</button>
+                  aria-label={map.crashed ? strings.mapRenderRetry : strings.mapRetry} onClick={map.retry}>{strings.retry}</button>
               </div>}
               <p className="muted">{strings.mapAttribution}</p>
             </div>
