@@ -4,7 +4,7 @@ export type Meters = number;
 export type ImagePixels = number;
 /** Terrain/contours are excluded from the current product scope. */
 export type LayerId = 'roads' | 'hiking' | 'water' | 'places';
-/** `roads.kind`; must match classifyRoad().detail in src/map/road-filter.mjs. */
+/** `roads.kind`; must match classifyRoad().detail in src/map/roadClass.ts. */
 export type RoadKind = 'major' | 'standard' | 'all';
 export type PlaceKind = 'city' | 'town' | 'village' | 'peak' | 'landmark';
 export type LabelLanguage = 'local' | 'en' | 'zh';

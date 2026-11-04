@@ -1,9 +1,12 @@
 # Third-party notices
 
-This list covers the photo fallback decoders and the existing OpenCC character mapping. Package versions are pinned in `package-lock.json`.
+This list covers the photo fallback decoders, map decoders and the existing OpenCC character mapping. Package versions are pinned in `package-lock.json`.
 
 | Component | Version / source revision | License | License file |
 | --- | --- | --- | --- |
+| @mapbox/vector-tile | 3.0.0 | BSD-3-Clause | [vector-tile-LICENSE](vector-tile-LICENSE) |
+| @mapbox/point-geometry, vector-tile dependency | 1.1.0 | ISC | [point-geometry-LICENSE](point-geometry-LICENSE) |
+| pbf | 5.1.2 | BSD-3-Clause | [pbf-LICENSE](pbf-LICENSE) |
 | libheif-js | 1.23.5 | LGPL-3.0 | [libheif-js-LICENSE](libheif-js-LICENSE) |
 | libheif, inside the HEIF WASM | 1.23.5 (verified through the WASM version API) | LGPL-3.0; bundled file also includes its MIT wrapper notice and GPL-3.0 text | [libheif-LICENSE](libheif-LICENSE) |
 | libde265, inside the HEIF WASM | 1.0.15 (verified through the WASM version API) | LGPL-3.0; bundled file includes GPL-3.0 text and sample MIT notice | [libde265-LICENSE](libde265-LICENSE) |
@@ -14,7 +17,7 @@ This list covers the photo fallback decoders and the existing OpenCC character m
 | wasm-feature-detect, installed jSquash dependency | 1.9.0; not used by the decode-only runtime bundle | Apache-2.0 | [wasm-feature-detect-LICENSE](wasm-feature-detect-LICENSE) |
 | OpenCC | Existing generated `TSCharacters` + `JPShinjitaiCharacters` snapshot; original upstream revision was not recorded | Apache-2.0 | [OpenCC-LICENSE](OpenCC-LICENSE) |
 
-The libheif-js, libheif, jSquash, utif2, pako and wasm-feature-detect license texts are copied without changes from their installed npm packages. OpenCC's existing license is retained. The following texts were absent from those packages and copied from the corresponding upstream source:
+The map decoder, libheif-js, libheif, jSquash, utif2, pako and wasm-feature-detect license texts are copied without changes from their installed npm packages. OpenCC's existing license is retained. The following texts were absent from those packages and copied from the corresponding upstream source:
 
 - [libde265 1.0.15 COPYING](https://github.com/strukturag/libde265/blob/v1.0.15/COPYING).
 - [libjxl LICENSE at the pinned codec revision](https://github.com/libjxl/libjxl/blob/9f544641ec83f6abd9da598bdd08178ee8a003e0/LICENSE).
