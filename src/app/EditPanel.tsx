@@ -1,9 +1,10 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LayerId, MapComposition, PhotoSession } from '../contracts.ts';
 import { MAX_RANGE_KM, MIN_LAYER_PX, MIN_RANGE_KM, type Anchor, type EditAction, type EditorState } from '../map/editComposition.ts';
 import { circleFeather, sideFeather } from '../map/style.ts';
 import type { DragMode } from './PhotoCanvas.tsx';
+import { scrubbedValue } from './scrub.ts';
 import { strings as s } from './strings.ts';
 
 type Edit = (action: EditAction) => void;
@@ -30,15 +31,37 @@ function Radios<T extends string | number>({ title, value, options, change }: {
 }
 
 interface NumericProps {
-  label: string; value: number; min?: number; max?: number; step?: number; unit?: string; disabled?: boolean;
+  label: string; value: number; min: number; max: number; step?: number; unit?: string; disabled?: boolean; log?: boolean;
   change: (value: number) => void;
 }
 
 /** Keep an incomplete typed value until commit, while idle fields always reflect the reducer. */
-function NumberField({ label, value, min, max, step = 1, unit, disabled, change }: NumericProps) {
+function NumberField({ label, value, min, max, step = 1, unit, disabled, log, change }: NumericProps) {
   const [draft, setDraft] = useState<string | null>(null);
+  const drag = useRef<{ id: number; x: number; start: number; moved: boolean } | null>(null);
   return <label className="edit-number"><span>{label}</span><span className="edit-number-box">
     <input type="number" aria-label={label} min={min} max={max} step={step} disabled={disabled}
+      // Dragging adjusts the value; a click without movement still opens it for typing.
+      onMouseDown={e => { if (document.activeElement !== e.currentTarget) e.preventDefault(); }}
+      onPointerDown={e => {
+        if (e.button !== 0 || document.activeElement === e.currentTarget) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { id: e.pointerId, x: e.clientX, start: value, moved: false };
+      }}
+      onPointerMove={e => {
+        const d = drag.current;
+        if (!d || d.id !== e.pointerId) return;
+        const dx = e.clientX - d.x;
+        if (!d.moved && Math.abs(dx) < 3) return;
+        d.moved = true;
+        change(scrubbedValue(d.start, dx, { min, max, step, log }));
+      }}
+      onPointerUp={e => {
+        const d = drag.current;
+        drag.current = null;
+        if (d && !d.moved) { e.currentTarget.focus(); e.currentTarget.select(); }
+      }}
+      onLostPointerCapture={() => { drag.current = null; }}
       value={draft ?? format(value)} onChange={e => {
         // Typing reports an input type. The arrows and spinner do not, and should apply at once.
         if ((e.nativeEvent as InputEvent).inputType || !Number.isFinite(e.currentTarget.valueAsNumber)) setDraft(e.currentTarget.value);
@@ -110,7 +133,7 @@ function Placement({ state, photo, edit, mode, setMode }: EditPanelProps) {
         change={value => edit({ type: 'height', value })} />
     </div>}
     <div className="edit-range-pair">
-      <NumberField label={s.geoRange} value={km} min={MIN_RANGE_KM} max={MAX_RANGE_KM} step={0.1} unit="km" change={setRange} />
+      <NumberField label={s.geoRange} value={km} min={MIN_RANGE_KM} max={MAX_RANGE_KM} step={0.01} log unit="km" change={setRange} />
       <Range compact label={s.geoRange} min={0} max={1} step={0.001} value={Math.log(km / MIN_RANGE_KM) / Math.log(kmRatio)}
         display={km.toFixed(2) + ' km'} change={t => setRange(MIN_RANGE_KM * kmRatio ** t)} />
     </div>

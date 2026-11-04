@@ -157,6 +157,9 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
 .edit-note { grid-column: 1 / -1; }
 .edit-number-box input { width: 0; min-width: 0; flex: 1; min-height: 38px; padding: 0.375rem; color: inherit; background: transparent; border: 0; }
 .edit-number-box input:focus-visible { outline: none; }
+.edit-number-box input { appearance: textfield; touch-action: pan-y; }
+.edit-number-box input::-webkit-inner-spin-button, .edit-number-box input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.edit-number-box input:not(:focus, :disabled) { cursor: ew-resize; user-select: none; }
 .edit-number-box small { color: var(--muted); }
 .edit-range-pair > .edit-number { grid-template-columns: 1fr minmax(6rem, 47%); align-items: center; }
 .edit-range { display: grid; gap: 0.125rem; }
