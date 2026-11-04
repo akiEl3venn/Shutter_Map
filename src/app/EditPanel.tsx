@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LayerId, MapComposition, PhotoSession } from '../contracts.ts';
-import { MAX_RANGE_KM, MIN_LAYER_PX, MIN_RANGE_KM, type Anchor, type EditAction, type EditorState } from '../map/editComposition.ts';
+import { anchoredCenter, MAX_RANGE_KM, MIN_LAYER_PX, MIN_RANGE_KM, type Anchor, type EditAction, type EditorState } from '../map/editComposition.ts';
 import { circleFeather, sideFeather } from '../map/style.ts';
 import type { DragMode } from './PhotoCanvas.tsx';
 import { scrubbedValue } from './scrub.ts';
@@ -31,16 +31,16 @@ function Radios<T extends string | number>({ title, value, options, change }: {
 }
 
 interface NumericProps {
-  label: string; value: number; min: number; max: number; step?: number; unit?: string; disabled?: boolean; log?: boolean;
+  label: string; value: number; min: number; max: number; step?: number; unit?: string; log?: boolean;
   change: (value: number) => void;
 }
 
 /** Keep an incomplete typed value until commit, while idle fields always reflect the reducer. */
-function NumberField({ label, value, min, max, step = 1, unit, disabled, log, change }: NumericProps) {
+function NumberField({ label, value, min, max, step = 1, unit, log, change }: NumericProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const drag = useRef<{ id: number; x: number; start: number; moved: boolean } | null>(null);
   return <label className="edit-number"><span>{label}</span><span className="edit-number-box">
-    <input type="number" aria-label={label} min={min} max={max} step={step} disabled={disabled}
+    <input type="number" aria-label={label} min={min} max={max} step={step}
       // Dragging adjusts the value; a click without movement still opens it for typing.
       onMouseDown={e => { if (document.activeElement !== e.currentTarget) e.preventDefault(); }}
       onPointerDown={e => {
@@ -99,6 +99,10 @@ function Placement({ state, photo, edit, mode, setMode }: EditPanelProps) {
   const setSize = (value: number) => edit({ type: 'size', value });
   const setRange = (value: number) => edit({ type: 'range', value });
   const setRotation = (value: number) => edit({ type: 'rotation', value });
+  const photoSize = { widthPx: photo.orientedWidthPx, heightPx: photo.orientedHeightPx };
+  // An offset reaches as far as the layer's center can go on the photo.
+  const [baseX, baseY] = anchoredCenter(state.anchor, state.marginPx, photoSize, c);
+  const [offsetX, offsetY] = state.offsetPx;
   return <Group title={s.editPlacement} first>
     <Radios<DragMode> title={s.dragMode} value={mode}
       options={[[ 'layer', s.dragLayer ], [ 'map', s.dragMap ]]} change={setMode} />
@@ -106,20 +110,19 @@ function Placement({ state, photo, edit, mode, setMode }: EditPanelProps) {
       {s.anchors.map((name, index) => {
         const anchor: Anchor = [index % 3 as Anchor[0], Math.floor(index / 3) as Anchor[1]];
         return <button type="button" key={name} title={name} aria-label={name}
-          aria-pressed={state.anchor?.[0] === anchor[0] && state.anchor[1] === anchor[1]}
+          aria-pressed={state.anchor[0] === anchor[0] && state.anchor[1] === anchor[1]}
           onClick={() => edit({ type: 'anchor', value: anchor })}>{directions[index]}</button>;
       })}
     </div></fieldset>
     <div className="edit-columns">
       <NumberField label={s.marginX} value={state.marginPx[0]} min={0} max={photo.orientedWidthPx} unit="px"
-        disabled={!state.anchor} change={x => edit({ type: 'margin', value: [x, state.marginPx[1]] })} />
+        change={x => edit({ type: 'margin', value: [x, state.marginPx[1]] })} />
       <NumberField label={s.marginY} value={state.marginPx[1]} min={0} max={photo.orientedHeightPx} unit="px"
-        disabled={!state.anchor} change={y => edit({ type: 'margin', value: [state.marginPx[0], y] })} />
-      {!state.anchor && <p className="muted edit-note">{s.marginHint}</p>}
-      <NumberField label={s.centerX} value={c.centerPx[0]} min={0} max={photo.orientedWidthPx} unit="px"
-        change={x => edit({ type: 'center', value: [x, c.centerPx[1]] })} />
-      <NumberField label={s.centerY} value={c.centerPx[1]} min={0} max={photo.orientedHeightPx} unit="px"
-        change={y => edit({ type: 'center', value: [c.centerPx[0], y] })} />
+        change={y => edit({ type: 'margin', value: [state.marginPx[0], y] })} />
+      <NumberField label={s.centerX} value={offsetX} min={-baseX} max={photo.orientedWidthPx - baseX} unit="px"
+        change={x => edit({ type: 'offset', value: [x, offsetY] })} />
+      <NumberField label={s.centerY} value={offsetY} min={-baseY} max={photo.orientedHeightPx - baseY} unit="px"
+        change={y => edit({ type: 'offset', value: [offsetX, y] })} />
     </div>
     <div className="edit-range-pair">
       <NumberField label={s.layerSize} unit="px" value={c.widthPx} min={minWidth} max={maxWidth} change={setSize} />

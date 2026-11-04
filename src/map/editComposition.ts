@@ -9,14 +9,17 @@ export type Anchor = readonly [column: 0 | 1 | 2, row: 0 | 1 | 2];
 export interface PhotoSize { widthPx: number; heightPx: number }
 export interface EditorState {
   composition: MapComposition;
-  anchor: Anchor | null;
+  /** The reference point on the photo. The layer sits at this point plus offsetPx. */
+  anchor: Anchor;
   marginPx: Point;
+  /** Right and down from the anchor's position, so every anchor starts at (0, 0). */
+  offsetPx: Point;
   /** Height over width, so a rectangle returns with its own proportions after visiting another shape. */
   rectangleAspect: number;
 }
 
 export type EditAction =
-  | { type: 'center' | 'margin'; value: Point }
+  | { type: 'center' | 'margin' | 'offset'; value: Point }
   | { type: 'anchor'; value: Anchor }
   | { type: 'geographicCenter'; value: LonLat }
   | { type: 'focus'; value: MapFocus | null }
@@ -43,7 +46,7 @@ export function createEditorState(photo: PhotoSize, coordinate: LonLat, focus: M
     { orientedWidthPx: photo.widthPx, orientedHeightPx: photo.heightPx }, { coordinate },
   )!;
   const composition = { ...base, labels: { ...base.labels, focus } };
-  return { composition, anchor: [1, 1], marginPx: [0, 0], rectangleAspect: 1 / 2 };
+  return { composition, anchor: [1, 1], marginPx: [0, 0], offsetPx: [0, 0], rectangleAspect: 1 / 2 };
 }
 
 export function anchoredCenter(anchor: Anchor, margin: Point, photo: PhotoSize, c: MapComposition): [number, number] {
@@ -93,8 +96,8 @@ function resized(c: MapComposition, width: number, min: number, max: number): Ma
  * In a photo's corner, the two sides along its edges stay hard: fading them would float the map off the edge. These are
  * the layer's own sides, top first, so a quarter turn moves them round. Any other angle has no side along an edge.
  */
-export function cornerSides(anchor: Anchor | null, rotationDegrees: number): MapComposition['feather']['hardSides'] {
-  if (!anchor || anchor[0] === 1 || anchor[1] === 1 || rotationDegrees % 90 !== 0) return [false, false, false, false];
+export function cornerSides(anchor: Anchor, rotationDegrees: number): MapComposition['feather']['hardSides'] {
+  if (anchor[0] === 1 || anchor[1] === 1 || rotationDegrees % 90 !== 0) return [false, false, false, false];
   const photoSides = [anchor[1] === 0, anchor[0] === 2, anchor[1] === 2, anchor[0] === 0];
   const turns = (rotationDegrees / 90 % 4 + 4) % 4;
   const side = (i: number) => photoSides[(i + turns) % 4]!;
@@ -102,7 +105,7 @@ export function cornerSides(anchor: Anchor | null, rotationDegrees: number): Map
 }
 
 export function editComposition(state: EditorState, action: EditAction, photo: PhotoSize): EditorState {
-  let { composition: c, anchor, marginPx, rectangleAspect } = state;
+  let { composition: c, anchor, marginPx, offsetPx, rectangleAspect } = state;
   const max = Math.max(photo.widthPx, photo.heightPx), min = Math.min(MIN_LAYER_PX, max);
   // Restrict the crop itself when it reaches a km limit, preserving geographic scale and stroke sizes.
   const cropWidth = (w: number) => Math.round(clamp(w, Math.max(min, MIN_RANGE_KM * 1000 / c.metersPerImagePixel),
@@ -110,8 +113,8 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
 
   switch (action.type) {
     case 'reset': return createEditorState(photo, c.geographicCenter, c.labels.focus);
-    case 'center': anchor = null; c = { ...c, centerPx: action.value }; break;
-    case 'anchor': anchor = action.value; break;
+    case 'center': case 'offset': break; // Both depend on the anchor's position for the final layer, below.
+    case 'anchor': anchor = action.value; offsetPx = [0, 0]; break;
     case 'margin':
       marginPx = [clamp(action.value[0], 0, photo.widthPx), clamp(action.value[1], 0, photo.heightPx)];
       break;
@@ -169,17 +172,27 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     case 'maxCount': c = { ...c, labels: { ...c.labels, maxCount: clamp(Math.round(action.value), 0, MAX_LABELS) } }; break;
   }
 
-  if (action.type === 'anchor' || action.type === 'center' || action.type === 'rotation' || action.type === 'shape') {
-    c = { ...c, feather: { ...c.feather, hardSides: cornerSides(anchor, c.rotationDegrees) } };
+  const base = anchoredCenter(anchor, marginPx, photo, c);
+  if (action.type === 'center' || action.type === 'offset') {
+    // Whole pixels, kept within reach: the layer's center stays on the photo.
+    const wanted = action.type === 'center' ? [action.value[0] - base[0], action.value[1] - base[1]] : action.value;
+    offsetPx = [Math.round(clamp(wanted[0]!, -base[0], photo.widthPx - base[0])),
+      Math.round(clamp(wanted[1]!, -base[1], photo.heightPx - base[1]))];
   }
-  const center = anchor ? anchoredCenter(anchor, marginPx, photo, c) : c.centerPx;
+  if (action.type === 'anchor' || action.type === 'center' || action.type === 'offset'
+    || action.type === 'rotation' || action.type === 'shape') {
+    // Moved off the corner, its sides no longer run along the photo's edges.
+    const inCorner = offsetPx[0] === 0 && offsetPx[1] === 0;
+    c = { ...c, feather: { ...c.feather, hardSides: inCorner ? cornerSides(anchor, c.rotationDegrees) : [false, false, false, false] } };
+  }
+  const center = [base[0] + offsetPx[0], base[1] + offsetPx[1]] as const;
   const [x, y] = snapCenter([clamp(center[0], 0, photo.widthPx), clamp(center[1], 0, photo.heightPx)], c);
   const axis = (snapped: number, target: number, dimension: number) => {
-    // Centered anchors use the default composition's lower pixel on exact ties.
-    if (anchor && target === dimension / 2 && snapped === target + 0.5) return snapped - 1;
+    // A centered layer uses the default composition's lower pixel on exact ties.
+    if (target === dimension / 2 && snapped === target + 0.5) return snapped - 1;
     // An odd raster can only have a half-pixel center. Keep it just inside the far edge.
     return snapped > dimension ? snapped - 1 : snapped;
   };
   const centerPx: Point = [axis(x, center[0], photo.widthPx), axis(y, center[1], photo.heightPx)];
-  return { composition: { ...c, centerPx }, anchor, marginPx, rectangleAspect };
+  return { composition: { ...c, centerPx }, anchor, marginPx, offsetPx, rectangleAspect };
 }
