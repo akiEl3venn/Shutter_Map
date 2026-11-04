@@ -40,7 +40,7 @@ export function createEditorState(photo: PhotoSize, coordinate: LonLat): EditorS
   const composition = defaultComposition(
     { orientedWidthPx: photo.widthPx, orientedHeightPx: photo.heightPx }, { coordinate },
   )!;
-  return { composition, anchor: [1, 1], marginPx: [0, 0], rectangleAspect: 2 / 3 };
+  return { composition, anchor: [1, 1], marginPx: [0, 0], rectangleAspect: 1 / 2 };
 }
 
 export function anchoredCenter(anchor: Anchor, margin: Point, photo: PhotoSize, c: MapComposition): [number, number] {

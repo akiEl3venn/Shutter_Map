@@ -27,7 +27,8 @@ export function defaultComposition(
     feather: {
       circlePx: size / 2,
       squarePx: [size / 2, size / 2, size / 2, size / 2],
-      rectanglePx: [size / 3, size / 3, size / 3, size / 3],
+      // A quarter of the width is half the height of the default 18:9 rectangle: a full fade from its short side.
+      rectanglePx: [size / 4, size / 4, size / 4, size / 4],
     },
   };
 }
