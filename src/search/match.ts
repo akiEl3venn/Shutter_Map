@@ -92,6 +92,34 @@ export async function prepareIndexInChunks(data: MajorData | CountryData, chunkS
   return { places };
 }
 
+/** Beyond this a photo is not really "in" a city: open sea, or a region the data does not cover. */
+const NEAREST_CITY_KM = 50;
+
+/**
+ * The city a point belongs to, found locally so the coordinate never leaves the browser. Plain distance would name a
+ * neighborhood inside Tokyo rather than Tokyo, so size counts too: a city's rank is 12·log10(population), which makes
+ * this population / distance³. A place right next to the photo still beats a metropolis 20 km away.
+ */
+export function nearestCity(index: SearchIndex, [longitude, latitude]: readonly [number, number]): PlaceResult | null {
+  const kmPerDegree = 111.32;
+  const cos = Math.cos(latitude * Math.PI / 180);
+  let best: PlaceResult | null = null;
+  let bestScore = -Infinity;
+  for (const { result, rank } of index.places) {
+    if (result.kind !== 'city') continue;
+    const dLon = (((result.coordinate[0] - longitude + 540) % 360) - 180) * cos * kmPerDegree;
+    const dLat = (result.coordinate[1] - latitude) * kmPerDegree;
+    const km = Math.hypot(dLon, dLat);
+    if (km > NEAREST_CITY_KM) continue;
+    const score = rank / 12 - 3 * Math.log10(Math.max(km, 1));
+    if (score > bestScore) {
+      best = result;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 function matchScore(name: IndexedName, query: string, queryWords: string[]): number {
   if (name.normalized === query) return 5;
   if (name.normalized.startsWith(query)) return 4;

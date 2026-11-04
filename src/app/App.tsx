@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import type { LocationChoice, PhotoSession } from '../contracts.ts';
+import type { LocationChoice, LonLat, PhotoSession } from '../contracts.ts';
 import { toLonLat } from '../location/gps.ts';
 import { readExif } from '../photo/exif.ts';
 import { loadPhoto } from '../photo/loadPhoto.ts';
@@ -8,10 +8,10 @@ import { strings } from './strings.ts';
 import { PlaceSearch } from './PlaceSearch.tsx';
 import { RegionCascade } from './RegionCascade.tsx';
 import type { RegionLoadStatus } from './RegionCascade.tsx';
-import { loadCountries, loadCountry } from '../search/geoData.ts';
+import { loadCountries, loadCountry, loadMajorIndex } from '../search/geoData.ts';
 import { pathForPlace } from '../search/cascade.ts';
 import type { CountrySummary, RegionSelection } from '../search/cascade.ts';
-import { prepareIndexInChunks } from '../search/match.ts';
+import { nearestCity, prepareIndexInChunks } from '../search/match.ts';
 import type { CountryData, SearchIndex } from '../search/match.ts';
 import { PhotoCanvas, type DragMode } from './PhotoCanvas.tsx';
 import { EditPanel } from './EditPanel.tsx';
@@ -31,6 +31,8 @@ export function App() {
   const [countryRequest, setCountryRequest] = useState<{ code?: string; status: RegionLoadStatus }>({ status: 'idle' });
   const [countryRetry, setCountryRetry] = useState(0);
   const [pendingPlace, setPendingPlace] = useState<{ country: string; id: number } | null>(null);
+  const [pendingNearest, setPendingNearest] = useState<{ country: string; coordinate: LonLat } | null>(null);
+  const regionSync = useRef(0);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string>(strings.loading);
   const [error, setError] = useState<string | null>(null);
@@ -92,8 +94,43 @@ export function App() {
     setPendingPlace(null);
   }, [pendingPlace, selectedCountry, countries, countriesStatus]);
 
+  // The major index only tells which country to open. Its file then has the smaller towns too.
+  useEffect(() => {
+    if (!pendingNearest || !selectedCountry || selectedCountry.data.code !== pendingNearest.country) return;
+    const city = nearestCity(selectedCountry.index, pendingNearest.coordinate);
+    const { country } = pendingNearest;
+    setPendingNearest(null);
+    setRegion(current => current.country === country
+      ? { ...current, continent: countries.find(item => item.code === country)?.continent } : current);
+    if (city?.id !== undefined) setPendingPlace({ country, id: city.id });
+  }, [pendingNearest, selectedCountry, countries]);
+
+  function stopRegionSync() {
+    regionSync.current += 1;
+    setPendingNearest(null);
+  }
+
+  /** Fill the menus from a photo's own position, without touching the location itself. */
+  function syncRegionTo(coordinate: LonLat) {
+    const id = ++regionSync.current;
+    void loadMajorIndex().then(index => {
+      if (id !== regionSync.current) return;
+      const city = nearestCity(index, coordinate);
+      if (!city?.countryCode) return;
+      setRegion({ country: city.countryCode });
+      setPendingNearest({ country: city.countryCode, coordinate });
+    }, () => {}); // The menus simply stay empty; the search box reports its own loading errors.
+  }
+
   function chooseLocation(choice: LocationChoice) {
+    stopRegionSync();
     setLocation(choice);
+    if (choice.source === 'exif') {
+      setPendingPlace(null);
+      setRegion({});
+      syncRegionTo(choice.coordinate);
+      return;
+    }
     const place = choice.source === 'search' ? choice.place : undefined;
     if (place?.id !== undefined && place.countryCode) {
       const country = place.countryCode;
@@ -139,7 +176,12 @@ export function App() {
         exifLocation,
       });
       if (exifLocation) chooseLocation({ coordinate: exifLocation, source: 'exif' });
-      else setLocation(current => current?.source === 'exif' ? null : current);
+      else if (location?.source === 'exif') {
+        stopRegionSync();
+        setPendingPlace(null);
+        setRegion({});
+        setLocation(null);
+      }
     } catch (failure) {
       if (id !== requestId.current) return;
       const code = typeof failure === 'object' && failure !== null && 'code' in failure ? failure.code : null;
@@ -246,6 +288,7 @@ export function App() {
               countriesStatus={countriesStatus} countryStatus={countryStatus}
               onChange={(next, place) => {
                 // Explicit menu changes cancel any older search backfill, including in-flight loads.
+                stopRegionSync();
                 setPendingPlace(null);
                 setRegion(next);
                 if (place) setLocation({ source: 'search', coordinate: place.coordinate, place });
