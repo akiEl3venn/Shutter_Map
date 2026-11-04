@@ -4,7 +4,7 @@ import { decodeTile } from './decodeTile.ts';
 import type { TileFeatures } from './decodeTile.ts';
 import { limitedTileCover, zoomFor } from './mercator.ts';
 import type { TileCoverage } from './mercator.ts';
-import type { MapWorkerRequest, MapWorkerResponse, RenderRequest } from './mapProtocol.ts';
+import type { ExportLayerRequest, MapWorkerRequest, MapWorkerResponse, RenderRequest } from './mapProtocol.ts';
 import { prepareTile, renderLayer } from './renderLayer.ts';
 import type { PreparedTile } from './renderLayer.ts';
 import { createTileLoader } from './tileLoader.ts';
@@ -62,6 +62,32 @@ function publish(view: View) {
     loaded: view.loaded.size, failed: view.failed.size, empty, bytes, detailReduced });
 }
 
+/** Coverage order keeps labels deterministic across preview frames and export. */
+function tilesOf(view: View): PreparedTile[] {
+  const tiles: PreparedTile[] = [];
+  for (const key of view.coverage.keys) {
+    const tile = view.loaded.get(tileId(key))?.tile;
+    if (tile) tiles.push(tile);
+  }
+  return tiles;
+}
+
+function exportLayer({ id, viewId }: ExportLayerRequest) {
+  let bitmap: ImageBitmap | undefined;
+  try {
+    const view = active;
+    if (view?.request.id !== viewId || view.failed.size || view.loaded.size !== view.coverage.keys.length) {
+      throw new Error('view-not-ready');
+    }
+    const { composition, lineColor } = view.request;
+    bitmap = renderLayer(tilesOf(view), composition, 1, lineColor, true);
+    send({ type: 'export-layer', id, bitmap }, [bitmap]);
+  } catch {
+    bitmap?.close();
+    send({ type: 'export-layer-failed', id });
+  }
+}
+
 function scheduleFrame(view: View) {
   if (view.timer !== undefined) return;
   const delay = Math.max(0, Math.ceil(view.lastFrame + frameIntervalMs - performance.now()));
@@ -69,16 +95,10 @@ function scheduleFrame(view: View) {
     view.timer = undefined;
     if (active !== view) return;
     const { id, composition, outputScale, lineColor } = view.request;
-    // Coverage order also stabilizes labels when equal-ranked candidates arrive out of order.
-    const tiles: PreparedTile[] = [];
-    for (const key of view.coverage.keys) {
-      const tile = view.loaded.get(tileId(key))?.tile;
-      if (tile) tiles.push(tile);
-    }
     const complete = view.loaded.size === view.coverage.keys.length;
     let bitmap: ImageBitmap | undefined;
     try {
-      bitmap = renderLayer(tiles, composition, outputScale, lineColor, complete);
+      bitmap = renderLayer(tilesOf(view), composition, outputScale, lineColor, complete);
       send({ type: 'frame', id, bitmap, complete }, [bitmap]);
       view.lastFrame = performance.now();
     } catch {
@@ -154,6 +174,7 @@ function start(request: RenderRequest) {
 }
 
 worker.onmessage = ({ data }: MessageEvent<MapWorkerRequest>) => {
+  if (data.type === 'export-layer') return exportLayer(data);
   const id = data.type === 'render' ? data.id : active?.request.id;
   try {
     if (data.type === 'cancel') cancel();

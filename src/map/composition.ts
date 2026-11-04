@@ -5,9 +5,11 @@ export function defaultComposition(
   location: Pick<LocationChoice, 'coordinate'> | null,
 ): MapComposition | null {
   if (!photo || !location) return null;
-  const size = Math.min(photo.orientedWidthPx, photo.orientedHeightPx) * 0.6;
+  const size = Math.max(1, Math.round(Math.min(photo.orientedWidthPx, photo.orientedHeightPx) * 0.6));
+  const left = Math.floor((photo.orientedWidthPx - size) / 2);
+  const top = Math.floor((photo.orientedHeightPx - size) / 2);
   return {
-    centerPx: [photo.orientedWidthPx / 2, photo.orientedHeightPx / 2],
+    centerPx: [left + size / 2, top + size / 2],
     widthPx: size,
     heightPx: size,
     rotationDegrees: 0,

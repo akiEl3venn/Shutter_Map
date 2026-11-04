@@ -1,7 +1,9 @@
 import { decodeImage } from './decode.ts';
 import type { OnFallback } from './decode.ts';
+import type { ImageFormat } from './sniff.ts';
 
 export interface LoadedPhoto {
+  format: ImageFormat;
   orientedWidthPx: number;
   orientedHeightPx: number;
   preview: ImageBitmap;
@@ -26,7 +28,7 @@ async function canvasPreview(source: ImageBitmap, width: number, height: number)
 }
 
 export async function loadPhoto(file: File, exifOrientation: number | null, onFallback?: OnFallback): Promise<LoadedPhoto> {
-  const { bitmap: fullSize } = await decodeImage(file, exifOrientation, onFallback);
+  const { bitmap: fullSize, format } = await decodeImage(file, exifOrientation, onFallback);
   try {
     const orientedWidthPx = fullSize.width;
     const orientedHeightPx = fullSize.height;
@@ -37,12 +39,12 @@ export async function loadPhoto(file: File, exifOrientation: number | null, onFa
       const preview = await createImageBitmap(fullSize, {
         imageOrientation: 'none', resizeWidth: width, resizeHeight: height, resizeQuality: 'high',
       });
-      if (preview.width === width && preview.height === height) return { orientedWidthPx, orientedHeightPx, preview };
+      if (preview.width === width && preview.height === height) return { format, orientedWidthPx, orientedHeightPx, preview };
       preview.close();
     } catch {
       // Some implementations reject or ignore bitmap resize options.
     }
-    return { orientedWidthPx, orientedHeightPx, preview: await canvasPreview(fullSize, width, height) };
+    return { format, orientedWidthPx, orientedHeightPx, preview: await canvasPreview(fullSize, width, height) };
   } finally {
     fullSize.close();
   }

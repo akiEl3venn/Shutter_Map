@@ -15,6 +15,8 @@ import { prepareIndexInChunks } from '../search/match.ts';
 import type { CountryData, SearchIndex } from '../search/match.ts';
 import { PhotoCanvas } from './PhotoCanvas.tsx';
 import { useMapPreview } from './useMapPreview.ts';
+import { exportFormats, type ExportFormat } from '../export/formats.ts';
+import { useExport } from './useExport.ts';
 
 export function App() {
   const [photo, setPhoto] = useState<PhotoSession | null>(null);
@@ -36,6 +38,8 @@ export function App() {
   const requestId = useRef(0);
   const dragDepth = useRef(0);
   const map = useMapPreview(photo, preview, location);
+  const exporter = useExport(photo, map.composition, map.exportLayer);
+  const busy = exporter.state.status === 'decoding' || exporter.state.status === 'encoding';
 
   // Release a bitmap only after React has committed its replacement, so no draw can see it closed.
   useEffect(() => () => preview?.close(), [preview]);
@@ -103,6 +107,7 @@ export function App() {
   }
 
   async function selectPhoto(file: File) {
+    exporter.reset(); // Stop a pending download immediately, even if the replacement is slow to decode.
     const id = ++requestId.current;
     setLoading(true);
     setLoadingMessage(strings.loading);
@@ -121,6 +126,8 @@ export function App() {
       setPreview(decoded.preview);
       setPhoto({
         file,
+        exifOrientation: exif.orientation,
+        sourceFormat: decoded.format,
         orientedWidthPx: decoded.orientedWidthPx,
         orientedHeightPx: decoded.orientedHeightPx,
         exifLocation,
@@ -179,13 +186,39 @@ export function App() {
           if (file) void selectPhoto(file);
         }} />
       <div className="workspace" aria-busy={loading}>
-        <section className="preview-area" aria-label={strings.previewLabel}>
-          <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} />
-          {!photo && <div className="empty-preview">
-            <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
-            <p>{strings.dropHint}</p><p className="muted">{strings.formatHint}</p>
-          </div>}
-        </section>
+        <div className="stage">
+          <section className="preview-area" aria-label={strings.previewLabel}>
+            <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} />
+            {!photo && <div className="empty-preview">
+              <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
+              <p>{strings.dropHint}</p><p className="muted">{strings.formatHint}</p>
+            </div>}
+          </section>
+          {photo && <section className="export-panel" aria-label={strings.exportTitle}>
+            <div className="export-controls">
+              <label>{strings.exportFormat}
+                <select value={exporter.format} disabled={busy}
+                  onChange={event => exporter.chooseFormat(event.currentTarget.value as ExportFormat)}>
+                  {Object.entries(exportFormats).map(([key, details]) =>
+                    <option key={key} value={key}>{details.label}</option>)}
+                </select>
+              </label>
+              <button type="button" disabled={loading || !map.ready || busy}
+                onClick={() => void exporter.start()}>{strings.exportAction}</button>
+              <p role="status">{exporter.state.status === 'decoding' ? strings.exportDecoding
+                : exporter.state.status === 'encoding' ? strings.exportEncoding
+                : exporter.state.status === 'done' ? strings.exportDone(exporter.state.width, exporter.state.height, exporter.state.bytes)
+                : exporter.state.status === 'idle' && !map.ready ? strings.exportWaiting
+                : ''}</p>
+            </div>
+            {exporter.state.status === 'failed' && <p className="error" role="alert">{strings.exportFailed}</p>}
+            {!exportFormats[exporter.format].alpha && <p className="muted">{strings.exportNoAlpha}</p>}
+            {exporter.format === 'gif' && <p className="muted">{strings.exportGifNote}</p>}
+            {photo.sourceFormat === 'heic' && <p className="muted">{strings.exportHeicUnavailable}</p>}
+            <p className="muted">{strings.exportNote}</p>
+            <p className="muted">{strings.exportCredit}</p>
+          </section>}
+        </div>
         <aside className="sidebar">
           <section>
             <h2>{strings.photoInformation}</h2>

@@ -85,7 +85,7 @@ function fallbackBitmap(file: File, format: ImageFormat, exifOrientation: number
   });
 }
 
-/** Full-resolution, oriented pixels shared by preview and future export. No photo data leaves this page. */
+/** Full-resolution, oriented pixels shared by preview and export. No photo data leaves this page. */
 export async function decodeImage(file: File, exifOrientation: number | null, onFallback?: OnFallback): Promise<DecodedImage> {
   if (isRawFilename(file.name)) throw Object.assign(new Error('raw-unsupported'), { code: 'raw-unsupported' });
   const format = sniffFormat(new Uint8Array(await file.slice(0, 64).arrayBuffer()));

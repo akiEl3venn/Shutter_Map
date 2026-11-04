@@ -1,3 +1,5 @@
+import type { ImageFormat } from './photo/sniff.ts';
+
 /** Draft v2 contracts (docs/architecture.md). No HTTP API of our own: tiles are static z/x/y MVT behind an edge cache. */
 export type LonLat = readonly [longitude: number, latitude: number];
 export type Meters = number;
@@ -50,6 +52,9 @@ export interface PlaceSearch {
 /** Never persist, serialize to network, include in telemetry, or attach to an error. */
 export interface PhotoSession {
   file: File;
+  /** Reuse the same orientation and decode path when loading source pixels for export. */
+  exifOrientation: number | null;
+  sourceFormat: ImageFormat;
   orientedWidthPx: ImagePixels;
   orientedHeightPx: ImagePixels;
   /** Kept in memory for restoring the photo's original position. */

@@ -28,5 +28,14 @@ export interface MapFrame {
   complete: boolean;
 }
 
-export type MapWorkerRequest = RenderRequest | { type: 'retry' } | { type: 'cancel' };
-export type MapWorkerResponse = MapProgress | MapFrame | { type: 'error'; id: number };
+export interface ExportLayerRequest {
+  type: 'export-layer';
+  id: number;
+  /** Only this already-loaded view can supply the layer; no new tiles are fetched. */
+  viewId: number;
+}
+
+export type MapWorkerRequest = RenderRequest | ExportLayerRequest | { type: 'retry' } | { type: 'cancel' };
+export type MapWorkerResponse = MapProgress | MapFrame | { type: 'error'; id: number }
+  | { type: 'export-layer'; id: number; bitmap: ImageBitmap }
+  | { type: 'export-layer-failed'; id: number };

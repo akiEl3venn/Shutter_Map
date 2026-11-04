@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { MapComposition, PhotoSession } from '../contracts.ts';
+import { drawOverlay } from '../map/composite.ts';
 import { strings } from './strings.ts';
 
 export interface Overlay {
@@ -39,13 +40,7 @@ export function PhotoCanvas({ preview, photo, overlay }: {
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(preview, 0, 0, photo.orientedWidthPx, photo.orientedHeightPx);
       if (overlay?.photo !== photo) return;
-      const layer = overlay.composition;
-      ctx.save();
-      ctx.translate(layer.centerPx[0], layer.centerPx[1]);
-      ctx.rotate(layer.rotationDegrees * Math.PI / 180);
-      ctx.globalAlpha = 0.9;
-      ctx.drawImage(overlay.bitmap, -layer.widthPx / 2, -layer.heightPx / 2, layer.widthPx, layer.heightPx);
-      ctx.restore();
+      drawOverlay(ctx, overlay.bitmap, overlay.composition);
     };
     redraw.current();
   }, [preview, photo, overlay]);

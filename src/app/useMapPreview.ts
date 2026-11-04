@@ -94,5 +94,8 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
     setRendering(true);
     client.retry();
   }
-  return { progress, overlay: composition ? frame.overlay : null, rendering, crashed, retry };
+  const ready = !!composition && frame.overlay?.composition === composition && !!progress
+    && !rendering && !crashed && progress.failed === 0 && progress.loaded === progress.total && progress.empty < progress.total;
+  return { progress, overlay: composition ? frame.overlay : null, rendering, crashed, retry,
+    composition, exportLayer: client.exportLayer, ready };
 }
