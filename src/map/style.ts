@@ -49,13 +49,6 @@ export function fadeBand(layer: keyof typeof layerLook, featherPx: number) {
 
 /** The one landmark the map is about stands out from the roads, whatever color those are. */
 export const focusColor = '#e5281f';
-export const focusHalo = 'rgba(0,0,0,0.75)';
-
-export function haloFor(color: string): string {
-  const rgb = Number.parseInt(color.slice(1), 16);
-  const brightness = (0.2126 * (rgb >> 16) + 0.7152 * ((rgb >> 8) & 255) + 0.0722 * (rgb & 255)) / 255;
-  return brightness > 0.5 ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.8)';
-}
 
 /** Crop limits the effective feather without overwriting a shape's saved widths. */
 export const circleFeather = (c: MapComposition) => Math.min(c.feather.circlePx, c.widthPx / 2);

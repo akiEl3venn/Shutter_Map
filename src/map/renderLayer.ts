@@ -1,8 +1,8 @@
 import type { MapComposition } from '../contracts.ts';
 import type { TileFeatures } from './decodeTile.ts';
 import { projectToLayer, rasterSize, tileTransform } from './layerGeometry.ts';
-import { isAreaName, labelStyle, layoutLabels, markFocus, selectLabelName, type LabelCandidate } from './labels.ts';
-import { circleFeather, fadeBand, fadeStops, focusColor, focusHalo, haloFor, layerLook, lineWidths, roadSpacing, sideFeather } from './style.ts';
+import { isAreaName, labelStyle, layoutLabels, markFocus, selectLabelName, type LabelCandidate, type PlacedLabel } from './labels.ts';
+import { circleFeather, fadeBand, fadeStops, focusColor, layerLook, lineWidths, roadSpacing, sideFeather } from './style.ts';
 import { roadTiers, TIER_COUNT, tierLimit, type PlacedRoad } from './thinRoads.ts';
 
 const strokeOrder = ['water', 'hiking', 'all', 'standard', 'major'] as const;
@@ -99,18 +99,29 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
   ctx.scale(outputScale, outputScale);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.lineWidth = labelStyle.halo * u;
+  const gap = labelStyle.gap * u;
+  const markerDot = (label: PlacedLabel, radius: number) => {
+    ctx.beginPath();
+    ctx.arc(label.x, label.y, radius, 0, 2 * Math.PI);
+    ctx.fill();
+  };
+  // The map makes way along the outline of each label, so the photo itself sets the text apart from the roads and
+  // nothing is painted over it. Clear them all first, so that a label's gap can never cut into its neighbor.
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = ctx.strokeStyle = '#000';
+  ctx.lineWidth = gap * 2;
   ctx.lineJoin = 'round';
   for (const label of labels) {
-    ctx.strokeStyle = label.focus ? focusHalo : haloFor(lineColor);
-    ctx.fillStyle = label.focus ? focusColor : lineColor;
-    if (label.marker) {
-      ctx.beginPath();
-      ctx.arc(label.x, label.y, labelStyle.markerRadius * u, 0, 2 * Math.PI);
-      ctx.fill();
-    }
+    if (label.marker) markerDot(label, labelStyle.markerRadius * u + gap);
     ctx.font = font(label.fontPx);
     ctx.strokeText(label.name, label.textX, label.textY);
+    ctx.fillText(label.name, label.textX, label.textY);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  for (const label of labels) {
+    ctx.fillStyle = label.focus ? focusColor : lineColor;
+    if (label.marker) markerDot(label, labelStyle.markerRadius * u);
+    ctx.font = font(label.fontPx);
     ctx.fillText(label.name, label.textX, label.textY);
   }
   ctx.restore();

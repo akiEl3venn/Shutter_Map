@@ -75,7 +75,7 @@ export interface PlacedLabel extends LabelCandidate {
 }
 
 /** Multiples of u = scalePx / 2400. Cropping a rectangle preserves text size and spacing. */
-export const labelStyle = { cityFont: 54, townFont: 44, pointFont: 36, markerRadius: 6, halo: 9, spacing: 140 };
+export const labelStyle = { cityFont: 54, townFont: 44, pointFont: 36, markerRadius: 6, gap: 6, spacing: 140 };
 /** Keep the text in the fully visible part of the roads, even at a hard edge. */
 const LABEL_INSET = 0.34;
 
