@@ -72,7 +72,7 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
 .result-description { margin-top: 0.2rem; color: var(--muted); font-size: 0.75rem; }
 .search-message { padding: 0.75rem; font-size: 0.8125rem; }
 .retry-search { margin: 0 0.75rem 0.75rem; }
-.restore-location, .geo-attribution { margin-top: 1rem; }
+.restore-location { margin-top: 1rem; }
 .map-data { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
 .map-data > p + p { margin-top: 0.375rem; }
 .map-failure { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0.5rem 0; }
@@ -119,6 +119,9 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
 }
 
 /* The preview stays put on larger screens; only the controls beside it scroll. */
+.stage-footer { padding: 0.625rem 1.5rem; border-top: 1px solid var(--line); background: #f9f9f6; color: var(--muted); font-size: 0.75rem; }
+.stage-footer p { line-height: 1.5; overflow-wrap: anywhere; }
+
 @media (min-width: 761px) {
   body { overflow: hidden; }
   .app { display: flex; flex-direction: column; height: 100svh; padding: 1.25rem 2rem; overflow: hidden; }
@@ -126,7 +129,7 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
   .workspace { flex: 1; min-height: 0; width: 100%; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
   .stage { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
   .preview-area { flex: 1 1 0; min-height: 280px; height: auto; }
-  .export-panel { flex: none; }
+  .export-panel, .stage-footer { flex: none; }
   /* Positioned, so absolutely placed descendants scroll inside it instead of stretching the page. */
   .sidebar { position: relative; min-height: 0; overflow-y: auto; }
   .sidebar > * { flex-shrink: 0; }

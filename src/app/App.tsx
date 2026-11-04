@@ -267,8 +267,12 @@ export function App() {
             {exporter.format === 'gif' && <p className="muted">{strings.exportGifNote}</p>}
             {photo.sourceFormat === 'heic' && <p className="muted">{strings.exportHeicUnavailable}</p>}
             <p className="muted">{strings.exportNote}</p>
-            <p className="muted">{strings.exportCredit}</p>
           </section>}
+          <footer className="stage-footer">
+            <p>{strings.geoAttribution}</p>
+            <p>{strings.mapAttribution}</p>
+            <p>{strings.exportCredit}</p>
+          </footer>
         </div>
         <aside className="sidebar">
           <section>
@@ -310,7 +314,6 @@ export function App() {
               onClick={() => chooseLocation({ coordinate: photo.exifLocation!, source: 'exif' })}>
               {strings.restorePhotoLocation}
             </button>}
-            <p className="muted geo-attribution">{strings.geoAttribution}</p>
             <div className="map-data">
               <p role="status" aria-live="polite">
                 {map.crashed ? null
@@ -332,7 +335,6 @@ export function App() {
                 <button type="button" className="secondary"
                   aria-label={map.crashed ? strings.mapRenderRetry : strings.mapRetry} onClick={map.retry}>{strings.retry}</button>
               </div>}
-              <p className="muted">{strings.mapAttribution}</p>
             </div>
           </section>
           {photo && editor && <EditPanel state={editor} photo={photo} edit={edit} mode={dragMode} setMode={setDragMode} />}
