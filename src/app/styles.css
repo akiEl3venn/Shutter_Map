@@ -169,7 +169,6 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
 .edit-range-name, .edit-color { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .edit-range-name span, .edit-color span { color: var(--muted); font-variant-numeric: tabular-nums; }
 .edit-range input { width: 100%; min-width: 0; min-height: 26px; margin: 0; }
-.edit-zero { min-height: 32px; padding: 0.25rem 0.75rem; }
 .edit-color input { width: 3rem; min-height: 32px; background: transparent; border: 1px solid var(--line); }
 .edit-labels > label:first-child { display: flex; align-items: center; justify-content: space-between; }
 .edit-labels select { max-width: 100%; min-height: 38px; border: 1px solid #868d81; border-radius: 5px; padding: 0.25rem 0.5rem; font: inherit; }

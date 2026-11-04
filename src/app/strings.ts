@@ -62,7 +62,7 @@ export const strings = {
   dragMode: '拖动时移动', dragLayer: '图层', dragMap: '地图内容',
   anchorGrid: '吸附位置', anchors: ['左上', '上', '右上', '左', '居中', '右', '左下', '下', '右下'],
   marginX: '水平边距', marginY: '垂直边距', marginHint: '选一个吸附位置后可以设边距。', centerX: '横向偏移', centerY: '纵向偏移',
-  layerSize: '大小', layerWidth: '宽', layerHeight: '高', geoRange: '地理范围', rotation: '旋转', rotationReset: '归零',
+  layerSize: '大小', layerWidth: '宽', layerHeight: '高', geoRange: '地理范围', rotation: '旋转',
   shape: '形状', shapeCircle: '圆形', shapeSquare: '方形', shapeRectangle: '矩形',
   feather: '羽化', featherHard: '硬边', featherLinked: '四边一起调',
   featherCornerNote: '贴着照片边缘的两边默认不羽化。取消“四边一起调”可以单独调整。',

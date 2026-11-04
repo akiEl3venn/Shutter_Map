@@ -141,7 +141,6 @@ function Placement({ state, photo, edit, mode, setMode }: EditPanelProps) {
       <NumberField label={s.rotation} value={c.rotationDegrees} min={-180} max={180} unit="°" change={setRotation} />
       <Range compact label={s.rotation} min={-180} max={180} value={c.rotationDegrees}
         display={format(c.rotationDegrees) + '°'} change={setRotation} />
-      <button type="button" className="secondary edit-zero" onClick={() => setRotation(0)}>{s.rotationReset}</button>
     </div>
   </Group>;
 }
