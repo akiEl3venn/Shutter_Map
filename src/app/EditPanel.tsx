@@ -4,7 +4,6 @@ import type { LayerId, MapComposition, PhotoSession } from '../contracts.ts';
 import { anchoredCenter, inPhotoCorner, MAX_RANGE_KM, MIN_LAYER_PX, MIN_RANGE_KM, type Anchor, type EditAction, type EditorState } from '../map/editComposition.ts';
 import { languageName, languageOptions, readerLanguage } from '../map/languages.ts';
 import { MAX_FEATHER_PERCENT, circleFeather, sideFeather } from '../map/style.ts';
-import type { DragMode } from './PhotoCanvas.tsx';
 import { scrubbedValue } from './scrub.ts';
 import { strings as s } from './strings.ts';
 
@@ -88,7 +87,7 @@ function Range({ label, value, min, max, step = 1, display, change, compact }: {
   </label>;
 }
 
-function Placement({ state, photo, edit, mode, setMode }: EditPanelProps) {
+function Placement({ state, photo, edit }: EditPanelProps) {
   const c = state.composition;
   const long = Math.max(photo.orientedWidthPx, photo.orientedHeightPx);
   const shortLimit = Math.min(MIN_LAYER_PX, long);
@@ -105,8 +104,6 @@ function Placement({ state, photo, edit, mode, setMode }: EditPanelProps) {
   const [baseX, baseY] = anchoredCenter(state.anchor, state.marginPx, photoSize, c);
   const [offsetX, offsetY] = state.offsetPx;
   return <Group title={s.editPlacement} first>
-    <Radios<DragMode> title={s.dragMode} value={mode}
-      options={[[ 'layer', s.dragLayer ], [ 'map', s.dragMap ]]} change={setMode} />
     <fieldset className="edit-anchors"><legend>{s.anchorGrid}</legend><div>
       {s.anchors.map((name, index) => {
         const anchor: Anchor = [index % 3 as Anchor[0], Math.floor(index / 3) as Anchor[1]];
@@ -186,7 +183,6 @@ function Shape({ c, drawn, inCorner, edit }: { c: MapComposition; drawn: MapComp
 
 interface EditPanelProps {
   state: EditorState; drawn: MapComposition; photo: PhotoSession; edit: Edit;
-  mode: DragMode; setMode: (mode: DragMode) => void;
 }
 export function EditPanel(props: EditPanelProps) {
   const { state, drawn, edit } = props;

@@ -13,7 +13,7 @@ import { pathForPlace } from '../search/cascade.ts';
 import type { CountrySummary, RegionSelection } from '../search/cascade.ts';
 import { nearestCity, prepareIndexInChunks } from '../search/match.ts';
 import type { CountryData, SearchIndex } from '../search/match.ts';
-import { PhotoCanvas, type DragMode } from './PhotoCanvas.tsx';
+import { PhotoCanvas } from './PhotoCanvas.tsx';
 import { EditPanel } from './EditPanel.tsx';
 import { useComposition } from './useComposition.ts';
 import { focusFor } from '../map/labels.ts';
@@ -42,7 +42,6 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(0);
   const dragDepth = useRef(0);
-  const [dragMode, setDragMode] = useState<DragMode>('layer');
   const { editor, drawn, edit } = useComposition(photo, location);
   const map = useMapPreview(photo, preview, drawn);
   const exporter = useExport(photo, drawn, map.exportLayer);
@@ -166,7 +165,6 @@ export function App() {
       }
       const exifLocation = toLonLat(exif.gps);
       setPreview(decoded.preview);
-      setDragMode('layer');
       setPhoto({
         file,
         exifOrientation: exif.orientation,
@@ -236,7 +234,7 @@ export function App() {
       <div className="workspace" aria-busy={loading}>
         <div className="stage">
           <section className="preview-area" aria-label={strings.previewLabel}>
-            <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} composition={editor?.composition ?? null} drawn={drawn} mode={dragMode}
+            <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} composition={editor?.composition ?? null} drawn={drawn}
               edit={edit} choosePoint={coordinate => chooseLocation({ source: 'coordinate', coordinate, focus: focusFor(location) })} />
             {!photo && <div className="empty-preview">
               <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
@@ -337,7 +335,7 @@ export function App() {
               </div>}
             </div>
           </section>
-          {photo && editor && drawn && <EditPanel state={editor} drawn={drawn} photo={photo} edit={edit} mode={dragMode} setMode={setDragMode} />}
+          {photo && editor && drawn && <EditPanel state={editor} drawn={drawn} photo={photo} edit={edit} />}
           <div className="status-area">
             <p className="status" role="status">{loading ? loadingMessage : error ? '' : photo ? strings.loaded : strings.waiting}</p>
             {error && <p className="error" role="alert">{error}</p>}

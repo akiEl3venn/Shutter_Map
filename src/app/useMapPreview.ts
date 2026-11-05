@@ -6,7 +6,7 @@ import type { MapProgress } from '../map/mapProtocol.ts';
 import { lineColorFor } from '../map/style.ts';
 import type { Overlay } from './PhotoCanvas.tsx';
 
-const RENDER_THROTTLE_MS = 120; // config/editor-policy.json
+const RENDER_THROTTLE_MS = 16; // config/editor-policy.json
 
 function sampleColor(ctx: CanvasRenderingContext2D, preview: ImageBitmap, photo: PhotoSession,
   x: number, y: number, widthPx: number, heightPx: number) {

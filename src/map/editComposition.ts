@@ -24,7 +24,7 @@ export interface EditorState {
 }
 
 export type EditAction =
-  | { type: 'center' | 'margin' | 'offset'; value: Point }
+  | { type: 'margin' | 'offset'; value: Point }
   | { type: 'anchor'; value: Anchor }
   | { type: 'geographicCenter'; value: LonLat }
   | { type: 'focus'; value: MapFocus | null }
@@ -153,7 +153,7 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
 
   switch (action.type) {
     case 'reset': return createEditorState(photo, c.geographicCenter, c.labels.focus, c.labels.localLanguages);
-    case 'center': case 'offset': break; // Both depend on the anchor's position for the final layer, below.
+    case 'offset': break; // It depends on the anchor's position for the final layer, below.
     case 'anchor':
       anchor = action.value;
       offsetPx = [0, 0];
@@ -223,11 +223,10 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
   }
 
   const base = anchoredCenter(anchor, marginPx, photo, c);
-  if (action.type === 'center' || action.type === 'offset') {
+  if (action.type === 'offset') {
     // Whole pixels, kept within reach: the layer's center stays on the photo.
-    const wanted = action.type === 'center' ? [action.value[0] - base[0], action.value[1] - base[1]] : action.value;
-    offsetPx = [Math.round(clamp(wanted[0]!, -base[0], photo.widthPx - base[0])),
-      Math.round(clamp(wanted[1]!, -base[1], photo.heightPx - base[1]))];
+    offsetPx = [Math.round(clamp(action.value[0], -base[0], photo.widthPx - base[0])),
+      Math.round(clamp(action.value[1], -base[1], photo.heightPx - base[1]))];
   }
   const center = [base[0] + offsetPx[0], base[1] + offsetPx[1]] as const;
   const [x, y] = snapCenter([clamp(center[0], 0, photo.widthPx), clamp(center[1], 0, photo.heightPx)], c);

@@ -59,7 +59,6 @@ export const strings = {
   exportGifNote: '最多 256 色，颜色会有损失；透明只有全透明和不透明两档。',
   exportHeicUnavailable: '暂不支持导出为 HEIC，已默认选择 PNG。',
   editPlacement: '位置与大小', editShape: '形状与羽化', editStyle: '样式', editLayers: '图层与细节', editLabels: '标注',
-  dragMode: '拖动时移动', dragLayer: '图层', dragMap: '地图内容',
   anchorGrid: '吸附位置', anchors: ['左上', '上', '右上', '左', '居中', '右', '左下', '下', '右下'],
   marginX: '水平边距', marginY: '垂直边距', centerX: '横向偏移', centerY: '纵向偏移',
   layerSize: '大小', layerWidth: '宽', layerHeight: '高', geoRange: '地理范围', rotation: '旋转',

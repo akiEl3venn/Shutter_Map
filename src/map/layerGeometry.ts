@@ -40,12 +40,6 @@ export function rasterCenter(c: MapComposition): LonLat {
     Math.max(0, Math.min(1, worldY + (dx * Math.sin(a) + dy * Math.cos(a)) * worldPerPx)));
 }
 
-export function hitsLayer(point: readonly [number, number], c: MapComposition): boolean {
-  const dx = point[0] - c.centerPx[0], dy = point[1] - c.centerPx[1];
-  if (c.shape === 'circle') return Math.hypot(dx, dy) <= c.widthPx / 2;
-  return Math.abs(dx) <= c.widthPx / 2 && Math.abs(dy) <= c.heightPx / 2;
-}
-
 export function tileTransform(key: TileKey, extent: number, composition: MapComposition, outputScale: number): {
   matrix: [number, number, number, number, number, number];
   clip: { x: number; y: number; width: number; height: number };
