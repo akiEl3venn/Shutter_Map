@@ -58,22 +58,40 @@ function pathsToDraw({ paths, tiers }: PreparedTile, layer: StrokeLayer, spacing
 
 const font = (px: number) => `600 ${px}px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif`;
 
+type TilePlace = PreparedTile['places'][number];
+const chosenNames = new WeakMap<TilePlace, { language: string; spokenThere: boolean; name: string | undefined }>();
+
+/** A place's label only changes with the language, while every frame asks for thousands of them. */
+function labelName(place: TilePlace, language: string, spokenThere: boolean): string | undefined {
+  const known = chosenNames.get(place);
+  if (known?.language === language && known.spokenThere === spokenThere) return known.name;
+  const name = selectLabelName(place, language, spokenThere);
+  chosenNames.set(place, { language, spokenThere, name });
+  return name;
+}
+
 function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly PreparedTile[],
   composition: MapComposition, outputScale: number, lineColor: string) {
   const candidates: LabelCandidate[] = [];
   const { focus, language, localLanguages } = composition.labels;
   const spokenThere = localLanguages.includes(language);
+  // Labels stay inside the frame, which at any rotation stays inside this circle. The tiles reach well beyond it.
+  const centerX = composition.widthPx / 2, centerY = composition.heightPx / 2;
+  const reach = Math.hypot(centerX, centerY);
   // The worker supplies coverage order, so ties do not depend on network arrival.
   for (const tile of tiles) {
     const { matrix: [s, , , , left, top] } = tileTransform(tile.key, tile.extent, composition, 1);
     for (const place of tile.places) {
       if (isAreaName(place.kind) && !composition.labels.showAreas) continue;
-      const name = selectLabelName(place, language, spokenThere);
+      const x = left + s * place.x, y = top + s * place.y;
+      if (Math.hypot(x - centerX, y - centerY) > reach) continue;
+      const name = labelName(place, language, spokenThere);
       if (!name) continue;
       candidates.push({
         name,
-        kind: place.kind, rank: place.rank, x: left + s * place.x, y: top + s * place.y,
-        aliases: [place.name, ...Object.values(place.names).filter(alias => alias !== undefined)],
+        kind: place.kind, rank: place.rank, x, y,
+        // Only the few near the focus are ever asked.
+        get aliases() { return [place.name, ...Object.values(place.names).filter(alias => alias !== undefined)]; },
       });
     }
   }

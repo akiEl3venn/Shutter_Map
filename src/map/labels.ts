@@ -71,12 +71,12 @@ export function markFocus(candidates: LabelCandidate[], focus: { x: number; y: n
   let nearest = reach;
   for (const candidate of candidates) {
     if (isAreaName(candidate.kind)) continue;
-    if (focus.name && !(candidate.aliases ?? [candidate.name]).some(alias => wanted.includes(nameKey(alias)))) continue;
+    // Distance first. This runs every frame over thousands of candidates, and folding their names is what costs.
     const distance = Math.hypot(candidate.x - focus.x, candidate.y - focus.y);
-    if (distance <= nearest) {
-      match = candidate;
-      nearest = distance;
-    }
+    if (distance > nearest) continue;
+    if (focus.name && !(candidate.aliases ?? [candidate.name]).some(alias => wanted.includes(nameKey(alias)))) continue;
+    match = candidate;
+    nearest = distance;
   }
   if (match) return candidates.map(candidate => candidate === match ? { ...candidate, focus: true } : candidate);
   if (!focus.name) return candidates;
