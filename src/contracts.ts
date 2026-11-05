@@ -9,7 +9,8 @@ export type LayerId = 'roads' | 'hiking' | 'water' | 'places';
 /** `roads.kind`; must match classifyRoad().detail in src/map/roadClass.ts. */
 export type RoadKind = 'major' | 'standard' | 'all';
 export type PlaceKind = 'city' | 'town' | 'village' | 'peak' | 'landmark';
-export type LabelLanguage = 'local' | 'en' | 'zh' | 'ja';
+/** A language code as map names use it: en, it, ja, zh (simplified), zh-Hant. */
+export type LabelLanguage = string;
 /** A tile absent from the archive is `ready` with no features, not an error. */
 export type TileState = 'loading' | 'ready' | 'failed';
 export type DetailOffset = -1 | 0 | 1 | 2;
@@ -100,6 +101,8 @@ export interface MapComposition {
   visibleLayers: Record<LayerId, boolean>;
   labels: {
     language: LabelLanguage;
+    /** The languages of the place on the map. In these, a place's own name is the right one. */
+    localLanguages: readonly LabelLanguage[];
     maxCount: number;
     /** Cities, towns and districts. Off by default: named areas crowd the map, while landmarks are what people look for. */
     showAreas: boolean;

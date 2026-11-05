@@ -17,7 +17,8 @@ export interface TileFeatures {
     x: number;
     y: number;
     name: string;
-    names: Partial<Record<'en' | 'zh' | 'ja', string>>;
+    /** By language code; zh is simplified where the map has it, and zh-Hant traditional. */
+    names: Record<string, string | undefined>;
     rank: number;
   }[];
 }
@@ -59,12 +60,17 @@ function addPlace(result: TileFeatures, feature: VectorTileFeature, kind: PlaceK
   // Some peaks are "named" after their height. A bare number tells a reader nothing.
   if (!name || !/\p{L}/u.test(name) || feature.type !== 1) return;
   const names: TileFeatures['places'][number]['names'] = {};
-  const en = text(properties['name:en']);
-  const ja = text(properties['name:ja']);
-  const zh = text(properties['name:zh-Hans']) ?? text(properties['name:zh-Hant']);
-  if (en) names.en = en;
-  if (ja) names.ja = ja;
-  if (zh) names.zh = zh;
+  for (const [key, value] of Object.entries(properties)) {
+    const translation = key.startsWith('name:') ? text(value) : undefined;
+    if (translation) names[key.slice(5)] = translation;
+  }
+  // Either form of Chinese stands in for the other: a reader can follow both better than none.
+  const { 'zh-Hans': simplified, 'zh-Hant': traditional } = names;
+  delete names['zh-Hans'];
+  if (simplified ?? traditional) {
+    names.zh = simplified ?? traditional;
+    names['zh-Hant'] = traditional ?? simplified;
+  }
   const scale = result.extent / feature.extent;
   for (const points of feature.loadGeometry()) {
     for (const point of points) {

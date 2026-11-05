@@ -23,7 +23,7 @@ export function defaultComposition(
     geographicCenter: location.coordinate,
     detailOffset: 0,
     visibleLayers: { roads: true, hiking: false, water: true, places: true },
-    labels: { language: 'local', maxCount: 5, showAreas: false, focus: null },
+    labels: { language: 'en', localLanguages: [], maxCount: 5, showAreas: false, focus: null },
     feather: {
       circlePx: size / 2,
       squarePx: [size / 2, size / 2, size / 2, size / 2],

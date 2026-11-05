@@ -1,5 +1,6 @@
 import type { DetailOffset, LabelLanguage, LayerId, LonLat, MapComposition, MapFocus } from '../contracts.ts';
 import { defaultComposition, MIN_LAYER_PX } from './composition.ts';
+import { languageOptions } from './languages.ts';
 import { projectToLayer, rasterSize } from './layerGeometry.ts';
 import { lonLatToWorld, metersPerWorldUnit, worldToLonLat } from './mercator.ts';
 
@@ -35,6 +36,7 @@ export type EditAction =
   | { type: 'layer'; layer: LayerId; value: boolean }
   | { type: 'detail'; value: DetailOffset }
   | { type: 'language'; value: LabelLanguage }
+  | { type: 'localLanguages'; value: readonly LabelLanguage[]; browser: LabelLanguage }
   | { type: 'showAreas'; value: boolean }
   | { type: 'reset' };
 
@@ -44,11 +46,12 @@ export const MIN_RANGE_KM = 0.5, MAX_RANGE_KM = 500;
 const MAX_LABELS = 20;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-export function createEditorState(photo: PhotoSize, coordinate: LonLat, focus: MapFocus | null = null): EditorState {
+export function createEditorState(photo: PhotoSize, coordinate: LonLat, focus: MapFocus | null = null,
+  localLanguages: readonly LabelLanguage[] = []): EditorState {
   const base = defaultComposition(
     { orientedWidthPx: photo.widthPx, orientedHeightPx: photo.heightPx }, { coordinate },
   )!;
-  const composition = { ...base, labels: { ...base.labels, focus } };
+  const composition = { ...base, labels: { ...base.labels, focus, localLanguages } };
   return { composition, anchor: [1, 1], marginPx: [0, 0], offsetPx: [0, 0], rectangleAspect: 1 / 2,
     softSides: [false, false, false, false] };
 }
@@ -163,7 +166,7 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     Math.min(max, MAX_RANGE_KM * 1000 / c.metersPerImagePixel)));
 
   switch (action.type) {
-    case 'reset': return createEditorState(photo, c.geographicCenter, c.labels.focus);
+    case 'reset': return createEditorState(photo, c.geographicCenter, c.labels.focus, c.labels.localLanguages);
     case 'center': case 'offset': break; // Both depend on the anchor's position for the final layer, below.
     case 'anchor':
       anchor = action.value;
@@ -223,6 +226,12 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     case 'layer': c = { ...c, visibleLayers: { ...c.visibleLayers, [action.layer]: action.value } }; break;
     case 'detail': c = { ...c, detailOffset: action.value }; break;
     case 'language': c = { ...c, labels: { ...c.labels, language: action.value } }; break;
+    case 'localLanguages': {
+      // Italian labels mean little on a map of Japan, unless Italian is what this person reads.
+      const language = languageOptions(action.value, action.browser).includes(c.labels.language) ? c.labels.language : 'en';
+      c = { ...c, labels: { ...c.labels, language, localLanguages: action.value } };
+      break;
+    }
     case 'showAreas': c = { ...c, labels: { ...c.labels, showAreas: action.value } }; break;
     case 'maxCount': c = { ...c, labels: { ...c.labels, maxCount: clamp(Math.round(action.value), 0, MAX_LABELS) } }; break;
   }

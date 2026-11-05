@@ -1,25 +1,29 @@
-import type { LocationChoice, MapComposition, MapFocus, PlaceKind } from '../contracts.ts';
+import type { LabelLanguage, LocationChoice, MapComposition, MapFocus, PlaceKind } from '../contracts.ts';
 import { foldCjk } from '../search/normalize.ts';
 
-type NameLanguage = 'en' | 'zh' | 'ja';
 const inLatinLetters = (name: string) => /^[\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]+$/u.test(name);
 
+const isChinese = (language: LabelLanguage) => language === 'zh' || language === 'zh-Hant';
+
 /**
- * The name to show, if any. Local names are always in Latin letters: a place's own name where it has one (Musée du
- * Louvre), otherwise its English or romanized one (Shinjuku Golden Gai). A place with neither is left off rather than
+ * The name to show, if any: the place's name in this language, and where this language is spoken there, its own name.
+ * Otherwise the name in Latin letters, English first (Shinjuku Golden Gai), then its own (Musée du Louvre). Someone who
+ * reads Chinese or Japanese can still follow its own name in those scripts. Any other place is left off rather than
  * romanized here, which would need a dictionary: read as Chinese, 新宿 would come out as "Xinsu".
  */
-export function selectLabelName(place: { name: string; names: Partial<Record<NameLanguage, string>> },
-  language: 'local' | NameLanguage): string | undefined {
-  if (language === 'local') return [place.name, place.names.en].find(name => name && inLatinLetters(name));
-  const name = place.names[language] || place.name;
+export function selectLabelName(place: { name: string; names: Record<string, string | undefined> },
+  language: LabelLanguage, spokenThere = false): string | undefined {
+  const { name, names } = place;
+  const found = names[language] ?? (spokenThere ? name : undefined)
+    ?? [names.en, name].find(candidate => candidate && inLatinLetters(candidate))
+    ?? (isChinese(language) || language === 'ja' ? name : undefined);
   // Only a Chinese reader wants simplified forms; Japanese keeps its own script (渋谷, not 涩谷).
-  return language === 'zh' ? foldCjk(name) : name;
+  return found && language === 'zh' ? foldCjk(found) : found;
 }
 
 /** A chosen landmark's label where the map has none. Search data holds a Chinese name and a Latin one, and only a Chinese map wants the former. */
-export function focusLabel(focus: MapFocus, language: 'local' | NameLanguage): string | undefined {
-  return language === 'zh' ? focus.name : focus.englishName ?? focus.name;
+export function focusLabel(focus: MapFocus, language: LabelLanguage): string | undefined {
+  return isChinese(language) ? focus.name : focus.englishName ?? focus.name;
 }
 
 /** Named areas, as opposed to the points of interest within them. */

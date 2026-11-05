@@ -2,6 +2,7 @@ import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LayerId, MapComposition, PhotoSession } from '../contracts.ts';
 import { anchoredCenter, inPhotoCorner, MAX_RANGE_KM, MIN_LAYER_PX, MIN_RANGE_KM, type Anchor, type EditAction, type EditorState } from '../map/editComposition.ts';
+import { languageName, languageOptions, readerLanguage } from '../map/languages.ts';
 import { circleFeather, sideFeather } from '../map/style.ts';
 import type { DragMode } from './PhotoCanvas.tsx';
 import { scrubbedValue } from './scrub.ts';
@@ -190,6 +191,7 @@ interface EditPanelProps {
 export function EditPanel(props: EditPanelProps) {
   const { state, drawn, edit } = props;
   const c = state.composition;
+  const languages = languageOptions(c.labels.localLanguages, readerLanguage());
   const [lastColor, setLastColor] = useState<`#${string}`>('#ffffff');
   return <section className="edit-panel" id="edit-panel">
     <Placement {...props} />
@@ -221,10 +223,9 @@ export function EditPanel(props: EditPanelProps) {
     </Group>
     <Group title={s.editLabels}>
       <fieldset className="edit-labels" disabled={!c.visibleLayers.places}>
-        <label>{s.labelLanguage}<select value={c.labels.language}
-          onChange={e => edit({ type: 'language', value: e.currentTarget.value as MapComposition['labels']['language'] })}>
-          <option value="local">{s.labelLocal}</option><option value="en">English</option>
-          <option value="zh">中文</option><option value="ja">日本語</option>
+        <label>{s.labelLanguage}<select value={c.labels.language} disabled={languages.length < 2}
+          onChange={e => edit({ type: 'language', value: e.currentTarget.value })}>
+          {languages.map(code => <option key={code} value={code}>{languageName(code)}</option>)}
         </select></label>
         <NumberField label={s.labelCount} min={0} max={20} step={1} value={c.labels.maxCount}
           change={value => edit({ type: 'maxCount', value })} />

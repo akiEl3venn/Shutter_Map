@@ -61,21 +61,22 @@ const font = (px: number) => `600 ${px}px system-ui, "PingFang SC", "Microsoft Y
 function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly PreparedTile[],
   composition: MapComposition, outputScale: number, lineColor: string) {
   const candidates: LabelCandidate[] = [];
+  const { focus, language, localLanguages } = composition.labels;
+  const spokenThere = localLanguages.includes(language);
   // The worker supplies coverage order, so ties do not depend on network arrival.
   for (const tile of tiles) {
     const { matrix: [s, , , , left, top] } = tileTransform(tile.key, tile.extent, composition, 1);
     for (const place of tile.places) {
       if (isAreaName(place.kind) && !composition.labels.showAreas) continue;
-      const name = selectLabelName(place, composition.labels.language);
+      const name = selectLabelName(place, language, spokenThere);
       if (!name) continue;
       candidates.push({
         name,
         kind: place.kind, rank: place.rank, x: left + s * place.x, y: top + s * place.y,
-        aliases: [place.name, ...Object.values(place.names)],
+        aliases: [place.name, ...Object.values(place.names).filter(alias => alias !== undefined)],
       });
     }
   }
-  const { focus, language } = composition.labels;
   let marked = candidates;
   if (focus) {
     const [x, y] = projectToLayer(focus.coordinate, composition);

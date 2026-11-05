@@ -121,6 +121,24 @@ export function nearestCity(index: SearchIndex, [longitude, latitude]: readonly 
   return best;
 }
 
+/** Roughly how far a mountain or a park can be from any known place, while still being in that place's country. */
+const NEAREST_COUNTRY_KM = 150;
+
+/** The country a point is in, going by the nearest known place, found locally so the coordinate never leaves the browser. */
+export function nearestCountry(index: SearchIndex, [longitude, latitude]: readonly [number, number]): string | null {
+  const cos = Math.cos(latitude * Math.PI / 180);
+  let country: string | null = null;
+  let nearest = NEAREST_COUNTRY_KM / 111.32;
+  for (const { result: { coordinate, countryCode } } of index.places) {
+    const distance = Math.hypot(((coordinate[0] - longitude + 540) % 360 - 180) * cos, coordinate[1] - latitude);
+    if (countryCode && distance < nearest) {
+      country = countryCode;
+      nearest = distance;
+    }
+  }
+  return country;
+}
+
 function matchScore(name: IndexedName, query: string, queryWords: string[]): number {
   if (name.normalized === query) return 5;
   if (name.normalized.startsWith(query)) return 4;
