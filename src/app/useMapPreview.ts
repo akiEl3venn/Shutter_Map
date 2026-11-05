@@ -7,6 +7,13 @@ import { lineColorFor } from '../map/style.ts';
 import type { Overlay } from './PhotoCanvas.tsx';
 
 const RENDER_THROTTLE_MS = 16; // config/editor-policy.json
+/**
+ * Unless it is a quarter turn, a turned map costs the GPU ten times as much per frame: 146 ms against 14 over Tokyo on an
+ * RTX 2070. Frames queue up, and the page waits on the GPU. At half the resolution it is 6 ms, whatever the layer or the
+ * range. So while edits keep coming, a turned map is drawn as a draft, and sharply once they pause.
+ */
+const TURNED_DRAFT_SCALE = 0.5;
+const TURNED_SETTLE_MS = 200;
 
 function sampleColor(ctx: CanvasRenderingContext2D, preview: ImageBitmap, photo: PhotoSession,
   x: number, y: number, widthPx: number, heightPx: number) {
@@ -47,6 +54,12 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
   const [frame, setFrame] = useState<{ sequence: number; overlay: Overlay | null }>({ sequence: 0, overlay: null });
   const sequence = useRef(0);
   const owned = useRef(new Map<number, ImageBitmap>());
+  /** A draft is on its way or up, and the sharp frame that follows it has yet to be asked for. */
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function stopSettling() {
+    if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+    settleTimer.current = null;
+  }
   function replaceFrame(overlay: Overlay | null) {
     const serial = ++sequence.current;
     if (overlay) owned.current.set(serial, overlay.bitmap);
@@ -62,9 +75,11 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
       if (!source.current) { value.bitmap.close(); return; }
       replaceFrame({ bitmap: value.bitmap, composition: request.composition, photo: source.current,
         key: renderKey(request.composition) + request.lineColor });
-      if (value.complete) setRendering(false);
+      // Not ready after a draft: asking for the sharp frame would cancel an export started in between.
+      if (value.complete && settleTimer.current === null) setRendering(false);
     },
     failed() {
+      stopSettling();
       setCrashed(true);
       setRendering(false);
       replaceFrame(null);
@@ -81,6 +96,7 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
     }
   }, [frame]);
   useLayoutEffect(() => () => {
+    stopSettling();
     client.dispose();
     for (const bitmap of owned.current.values()) bitmap.close();
     owned.current.clear();
@@ -92,6 +108,7 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
     lastSent.current = -Infinity;
     setCrashed(false);
     setProgress(null);
+    stopSettling();
     client.cancel();
     replaceFrame(null);
     setRendering(false);
@@ -104,7 +121,17 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
       lastKey.current = wanted;
       setRendering(true);
       setCrashed(false);
-      client.render({ composition, outputScale: preview.width / photo.orientedWidthPx, lineColor });
+      stopSettling();
+      const outputScale = preview.width / photo.orientedWidthPx;
+      if (composition.rotationDegrees % 90 === 0) {
+        client.render({ composition, outputScale, lineColor });
+        return;
+      }
+      settleTimer.current = setTimeout(() => {
+        settleTimer.current = null;
+        client.render({ composition, outputScale, lineColor });
+      }, TURNED_SETTLE_MS);
+      client.render({ composition, outputScale: outputScale * TURNED_DRAFT_SCALE, lineColor });
     };
     const wait = lastSent.current + RENDER_THROTTLE_MS - performance.now();
     if (wait <= 0) { send(); return; }
