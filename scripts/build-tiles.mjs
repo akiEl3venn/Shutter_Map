@@ -1,10 +1,12 @@
 import { spawn, execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { PMTiles } from 'pmtiles';
+import { FsSource } from './dev-tiles.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const run = promisify(execFile);
@@ -46,12 +48,14 @@ if (!options.skipBuild) {
   });
 }
 
-const [{ stdout: metadataJson }, { stdout: head }, { stdout: dirty }] = await Promise.all([
-  run(resolve(root, 'data-downloads/tools/pmtiles.exe'), ['show', output, '--metadata'], { cwd: root, windowsHide: true }),
+const [{ stdout: head }, { stdout: dirty }] = await Promise.all([
   run('git', ['rev-parse', 'HEAD'], { cwd: root, windowsHide: true }),
-  run('git', ['status', '--porcelain'], { cwd: root, windowsHide: true }),
+  // The manifest is this script's own output, so it says nothing about the code that built the tiles.
+  run('git', ['status', '--porcelain', '--', '.', ':(exclude)data/tiles'], { cwd: root, windowsHide: true }),
 ]);
-const metadata = JSON.parse(metadataJson);
+const handle = await open(output, 'r');
+const metadata = await new PMTiles(new FsSource(output, handle, (await handle.stat()).size)).getMetadata();
+await handle.close();
 const required = key => {
   if (!metadata[key]) throw new Error(`Tile archive is missing ${key}`);
   return metadata[key];
