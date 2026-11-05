@@ -2,7 +2,7 @@ import { open, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Compression, PMTiles, SharedPromiseCache } from 'pmtiles';
 
-class FsSource {
+export class FsSource {
   constructor(path, handle, size) {
     this.path = path;
     this.handle = handle;
@@ -50,7 +50,7 @@ export default function devTiles() {
     name: 'local-pmtiles',
     apply: 'serve',
     async configureServer(server) {
-      const directory = resolve(server.config.root, 'data-downloads/tiles');
+      const directory = resolve(server.config.root, 'data-downloads/tiles-built');
       let files;
       try {
         files = (await readdir(directory, { withFileTypes: true }))

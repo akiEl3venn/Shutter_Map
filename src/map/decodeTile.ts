@@ -3,7 +3,6 @@ import type { VectorTileFeature, VectorTileLayer } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
 import type { PlaceKind, RoadKind, TileKey } from '../contracts.ts';
 import { fame } from './labels.ts';
-import { classifyRoad } from './roadClass.ts';
 
 export interface TileFeatures {
   key: TileKey;
@@ -23,15 +22,13 @@ export interface TileFeatures {
   }[];
 }
 
-const excludedRoads = new Set(['rail', 'ferry', 'aerialway', 'aeroway', 'pier']);
-/** Ordinary-road classes that yield first where the map is crowded. */
-const minorRoads = new Set(['service', 'pedestrian', 'living_street', 'track']);
-const landmarks = new Set(['attraction', 'landmark', 'memorial', 'monument', 'museum', 'castle', 'viewpoint', 'lighthouse', 'tower']);
 type Properties = VectorTileFeature['properties'];
 type Point = { x: number; y: number };
 
 function text(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
+  if (typeof value !== 'string') return undefined;
+  // OSM separates several values of one tag with a semicolon: Sungnyemun Gate;Sungnyemun (Gate).
+  return value.split(';')[0]!.trim() || undefined;
 }
 
 function numeric(value: unknown): number | undefined {
@@ -81,24 +78,24 @@ function addPlace(result: TileFeatures, feature: VectorTileFeature, kind: PlaceK
 
 const translationsOf = (properties: Properties) => Object.keys(properties).filter(key => key.startsWith('name:')).length;
 
-/** Adapt Protomaps basemap MVT to our own layers; bytes are already HTTP-decompressed. */
+/** Decode the layers classified by data/roads.yml; bytes are already HTTP-decompressed. */
 export function decodeTile(bytes: ArrayBuffer, key: TileKey): TileFeatures {
   const { layers } = new VectorTile(new PbfReader(new Uint8Array(bytes)));
-  const extent = (layers.roads ?? layers.water ?? layers.places ?? layers.pois)?.extent ?? 4096;
+  const extent = (layers.roads ?? layers.water ?? layers.places)?.extent ?? 4096;
   const result: TileFeatures = { key, extent, roads: [], hiking: [], water: { polygons: [], lines: [] }, places: [] };
 
   eachFeature(layers.roads, (feature) => {
-    if (feature.type !== 2 || excludedRoads.has(String(feature.properties.kind))) return;
-    // Development tiles omit bicycle/foot tags: cycle-only paths cannot be identified,
-    // so a path remains hiking. Dedicated cycleways are still excluded by the filter.
-    const classification = classifyRoad({ highway: text(feature.properties.kind_detail) });
-    if (!classification) return;
+    if (feature.type !== 2) return;
+    const kind = String(feature.properties.kind) as RoadKind;
     for (const points of feature.loadGeometry()) {
       const line = flatLine(points, extent / feature.extent);
-      if (classification.layer === 'hiking') result.hiking.push({ line });
-      else if (minorRoads.has(String(feature.properties.kind_detail))) result.roads.push({ kind: classification.detail, line, minor: true });
-      else result.roads.push({ kind: classification.detail, line });
+      if (feature.properties.minor) result.roads.push({ kind, line, minor: true });
+      else result.roads.push({ kind, line });
     }
+  });
+  eachFeature(layers.hiking, (feature) => {
+    if (feature.type !== 2) return;
+    for (const points of feature.loadGeometry()) result.hiking.push({ line: flatLine(points, extent / feature.extent) });
   });
 
   eachFeature(layers.water, (feature) => {
@@ -115,19 +112,11 @@ export function decodeTile(bytes: ArrayBuffer, key: TileKey): TileFeatures {
   });
 
   eachFeature(layers.places, (feature) => {
-    const kind = feature.properties.kind_detail;
-    if (kind !== 'city' && kind !== 'town' && kind !== 'village') return;
-    const rank = numeric(feature.properties.population_rank) ?? numeric(feature.properties.population) ?? 0;
-    addPlace(result, feature, kind, rank);
-  });
-  eachFeature(layers.pois, (feature) => {
-    const kind = text(feature.properties.kind);
     const { properties } = feature;
-    if (kind === 'peak' || kind === 'volcano') {
-      addPlace(result, feature, 'peak', fame(translationsOf(properties), numeric(properties.min_zoom), numeric(properties.elevation)));
-    } else if (kind && landmarks.has(kind)) {
-      addPlace(result, feature, 'landmark', fame(translationsOf(properties), numeric(properties.min_zoom)));
-    }
+    const kind = properties.kind;
+    if (kind === 'city' || kind === 'town' || kind === 'village') addPlace(result, feature, kind, numeric(properties.rank) ?? 0);
+    else if (kind === 'peak') addPlace(result, feature, 'peak', fame(translationsOf(properties), numeric(properties.min_zoom), numeric(properties.elevation)));
+    else if (kind === 'landmark') addPlace(result, feature, 'landmark', fame(translationsOf(properties), numeric(properties.min_zoom)));
   });
 
   // Keep tile-local coordinates, including the buffer outside [0, extent], for later drawing.

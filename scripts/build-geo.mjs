@@ -5,8 +5,9 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { normalize } from '../src/search/normalize.ts';
+import { readLandmarks } from './osm-landmarks.mjs';
 
-const LANDMARK_CODES = new Set('MUS CSTL MNMT TOWR LTHSE RUIN TMPL PAL HSTS ANS BDG STDM ZOO PYR MT PK VLC CNYN ISL LK FLLS GLCR PRK RESN'.split(' '));
+const LANDMARK_CODES = new Set('MUS CSTL MNMT TOWR LTHSE RUIN TMPL PAL HSTS ANS BDG STDM ZOO PYR MT PK VLC CNYN ISL LK FLLS GLCR PRK RESN BLDG WALL WALLA MTS HBR GRGE BAY CAPE AMUS GDN SQR SHRN GATE OBS CH RLG'.split(' '));
 const CITY_CENTRES = new Set(['PPLC', 'PPLA', 'PPLG']);
 const EXCLUDED_CITIES = new Set(['PPLX', 'PPLH', 'PPLQ', 'PPLW']);
 const NON_LANGUAGES = new Set(['link', 'post', 'iata', 'icao', 'faac', 'abbr', 'wkdt', 'unlc', '']);
@@ -201,8 +202,136 @@ export function mergeCommunityNames(places, files) {
   };
 }
 
+/** OSM separates several values of one tag with a semicolon: 大阪城;大阪城天守阁. */
+export function tagValues(value) {
+  return String(value ?? '').split(';').map(part => part.trim()).filter(Boolean);
+}
+
+/** One OSM record as a place. `name` is Latin where there is one, as with GeoNames: the app shows it outside Chinese. */
+export function osmPlace(record, id, region) {
+  const extra = [];
+  const first = (value) => {
+    const [head, ...rest] = tagValues(value);
+    extra.push(...rest);
+    return head;
+  };
+  const local = first(record.name);
+  const names = Object.fromEntries(Object.entries(record.names).map(([language, value]) => [language, first(value)]));
+  const name = names.en ?? local;
+  const zh = names['zh-Hans'] ?? names['zh-Hant'] ?? (isKanjiOnly(local) && !/\p{Script=Hangul}/u.test(local) ? local : '');
+  return {
+    id, name, zh, lat: record.lat, lon: record.lon, cc: region.cc, admin1: region.admin1,
+    kind: { peak: 'PK', village: 'AREA' }[record.kind] ?? 'LMK',
+    rank: landmarkRank(Object.keys(names)),
+    alt: uniqueByNormalized([local, names['zh-Hant'], names.ja, names.ko, ...extra].filter(Boolean), [name, zh]).slice(0, 10),
+  };
+}
+
+/**
+ * OSM points carry no country or province, so a landmark takes them from the GeoNames features around it, of any class.
+ * Cities alone are too sparse: the closest one to Macau's Ruins of St. Paul's is across the border in Zhuhai. The five
+ * closest vote, because GeoNames files a few places in Macau under China.
+ */
+function regionFinder(features, cities) {
+  const cell = (lat, lon) => `${Math.floor(lat * 10)},${Math.floor(lon * 10)}`;
+  const grid = Map.groupBy(features, feature => cell(feature.lat, feature.lon));
+  const closest = (point, pool, count) => {
+    const cos = Math.cos(point.lat * Math.PI / 180);
+    const found = [];
+    for (const feature of pool) {
+      const distance = (feature.lat - point.lat) ** 2 + ((feature.lon - point.lon) * cos) ** 2;
+      if (found.length === count && distance >= found[count - 1].distance) continue;
+      found.push({ feature, distance });
+      found.sort((a, b) => a.distance - b.distance);
+      found.length = Math.min(found.length, count);
+    }
+    return found.map(({ feature }) => feature);
+  };
+  const around = (point) => {
+    for (const reach of [1, 3, 10, 30]) {
+      const pool = [];
+      for (let lat = -reach; lat <= reach; lat++) {
+        for (let lon = -reach; lon <= reach; lon++) {
+          const features = grid.get(cell(point.lat + lat / 10, point.lon + lon / 10));
+          if (features) pool.push(...features);
+        }
+      }
+      if (pool.length) return pool;
+    }
+    return features;  // A remote island: 南鸟岛.
+  };
+  const province = admin1 => admin1 && admin1 !== '00';
+  return (point) => {
+    const voters = closest(point, around(point), 5);
+    const votes = Map.groupBy(voters, feature => feature.cc);
+    // Most votes; on a tie, the country of the closest. Map keeps the order in which the countries first voted.
+    const [cc] = [...votes].reduce((best, entry) => entry[1].length > best[1].length ? entry : best);
+    const admin1 = voters.find(feature => feature.cc === cc && province(feature.admin1))?.admin1
+      ?? closest(point, cities.filter(city => city.cc === cc), 1)[0].admin1;
+    return { cc, admin1 };
+  };
+}
+
+const namesOf = place => [place.name, place.zh, ...place.alt].filter(Boolean).map(normalize);
+
+/**
+ * OSM's landmarks, with its points and names, since the map labels come from the same data. A GeoNames landmark of the
+ * same name nearby adds its aliases and its more specific type. The rest of GeoNames stays: harbours, ranges, walls.
+ */
+export function mergeOsmLandmarks(records, geonames, features, cities, communityNames = new Set()) {
+  const regionOf = regionFinder(features, cities);
+  const within = (a, b, km) => sphericalDistance(a, b) < km * 1000;
+  const areaOf = (lat, lon) => `${Math.floor(lat * 10)},${Math.floor(lon * 10)}`;
+  const byName = new Map();
+  const byArea = new Map();
+  const osm = [];
+  let id = 1_000_000_000;  // Clear of GeoNames ids.
+  for (const record of records) {
+    const place = osmPlace(record, id, regionOf(record));
+    const keys = [...new Set(namesOf(place))];
+    // The same place mapped twice, as a point and an area or as two parts of one site.
+    const twin = keys.flatMap(key => byName.get(key) ?? []).find(other => within(other, place, 1));
+    if (twin) {
+      twin.rank = Math.max(twin.rank, place.rank);
+      continue;
+    }
+    id += 1;
+    osm.push(place);
+    for (const key of keys) byName.set(key, [...byName.get(key) ?? [], place]);
+    const area = areaOf(place.lat, place.lon);
+    byArea.set(area, [...byArea.get(area) ?? [], place]);
+  }
+  const kept = [];
+  for (const feature of geonames) {
+    const wanted = namesOf(feature);
+    let match = wanted.flatMap(key => byName.get(key) ?? []).find(place => within(place, feature, 5));
+    if (!match) {
+      // One name inside the other, close by: 金龙山浅草寺 and 浅草寺.
+      const row = Math.floor(feature.lat * 10), column = Math.floor(feature.lon * 10);
+      const close = [];
+      for (let dRow = -1; dRow <= 1; dRow++) {
+        for (let dColumn = -1; dColumn <= 1; dColumn++) close.push(...byArea.get(`${row + dRow},${column + dColumn}`) ?? []);
+      }
+      match = close.filter(place => within(place, feature, 1)).find(place => namesOf(place).some(key => wanted.some((alias) => {
+        const [short, long] = key.length < alias.length ? [key, alias] : [alias, key];
+        return short.length >= 3 && long.includes(short);
+      })));
+    }
+    if (!match) {
+      kept.push(feature);
+      continue;
+    }
+    match.rank = Math.max(match.rank, feature.rank);
+    if (match.kind === 'LMK' || match.kind === 'PK') match.kind = feature.kind;
+    if (feature.zh && (!match.zh || communityNames.has(feature.id))) match.zh = feature.zh;
+    match.alt = uniqueByNormalized([...match.alt, feature.name, feature.zh, ...feature.alt].filter(Boolean), [match.name, match.zh]).slice(0, 10);
+  }
+  return [...osm, ...kept];
+}
+
+
 export async function main(args = process.argv.slice(2)) {
-  const options = { input: resolve('data-downloads/geonames'), output: resolve('public/geo-dev'), countries: null, minimumPopulation: 5000, maximumLandmarks: 40000, checkNames: false };
+  const options = { input: resolve('data-downloads/geonames'), output: resolve('public/geo-2026'), landmarks: null, countries: null, minimumPopulation: 5000, maximumLandmarks: 40000, checkNames: false };
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
     if (key === '--check-names') { options.checkNames = true; continue; }
@@ -210,6 +339,7 @@ export async function main(args = process.argv.slice(2)) {
     if (!value || value.startsWith('--')) throw new Error(`Missing value for ${key}`);
     if (key === '--in') options.input = resolve(value);
     else if (key === '--out') options.output = resolve(value);
+    else if (key === '--landmarks') options.landmarks = resolve(value);
     else if (key === '--countries') {
       const codes = value.split(',');
       if (codes.some(code => !/^[A-Z]{2}$/u.test(code))) throw new Error('--countries must contain uppercase country codes separated by commas');
@@ -269,6 +399,7 @@ export async function main(args = process.argv.slice(2)) {
   }
   const featureFiles = options.countries ? [...options.countries].map(cc => `${cc}.txt`) : ['allCountries.txt'];
   const candidates = new Map();
+  const regions = [];
   let readFeatures = 0;
   let invalidFeatures = 0;
   for (const filename of featureFiles) {
@@ -277,6 +408,9 @@ export async function main(args = process.argv.slice(2)) {
       readFeatures += 1;
       const feature = parseFeatureLine(line);
       if (!feature) { invalidFeatures += 1; continue; }
+      if (options.landmarks && countryInfo.has(feature.cc)) {
+        regions.push({ lat: feature.lat, lon: feature.lon, cc: feature.cc, admin1: feature.admin1 });
+      }
       if (!countryInfo.has(feature.cc) || (!isCity(feature) && !LANDMARK_CODES.has(feature.featureCode))) continue;
       candidates.set(feature.id, feature);
       candidateIds.add(feature.id);
@@ -317,10 +451,14 @@ export async function main(args = process.argv.slice(2)) {
   const version = basename(options.output);
   const byId = (a, b) => a.id - b.id;
   const cities = places.filter(place => place.kind === 'city');
-  const landmarks = places.filter(place => place.kind !== 'city').sort((a, b) => b.rank - a.rank || byId(a, b));
+  const geonamesLandmarks = places.filter(place => place.kind !== 'city');
+  const communityNames = new Set(nameFiles.filter(file => file.language === 'zh').flatMap(file => file.entries.map(entry => entry.id)));
+  const landmarks = (options.landmarks
+    ? mergeOsmLandmarks(await readLandmarks(options.landmarks), geonamesLandmarks, regions, cities, communityNames)
+    : geonamesLandmarks).sort((a, b) => b.rank - a.rank || byId(a, b));
   const majorCities = cities.filter(city => city.population >= options.minimumPopulation || CITY_CENTRES.has(city.featureCode));
   const majorPlaces = [...majorCities, ...landmarks.slice(0, options.maximumLandmarks)].sort(byId);
-  const availableCountries = [...new Set(places.map(place => place.cc))].sort();
+  const availableCountries = [...new Set(cities.map(place => place.cc))].sort();
   await mkdir(join(options.output, 'country'), { recursive: true });
   const report = [];
   async function writeJson(filename, value, entries, budget = Infinity) {
@@ -331,14 +469,14 @@ export async function main(args = process.argv.slice(2)) {
     report.push({ file: filename, entries, bytes, gzipBytes });
     if (gzipBytes > budget) console.warn(`WARNING: ${filename} gzip ${gzipBytes} bytes exceeds target ${budget} bytes`);
   }
-  await writeJson('countries.json', { version, generated: new Date().toISOString().slice(0, 10), source: 'GeoNames, CC BY 4.0', countries: availableCountries.map(code => {
+  await writeJson('countries.json', { version, generated: new Date().toISOString().slice(0, 10), source: options.landmarks ? 'GeoNames, CC BY 4.0; OpenStreetMap contributors, ODbL' : 'GeoNames, CC BY 4.0', countries: availableCountries.map(code => {
     const { continent, name } = countryInfo.get(code);
     return { code, continent, name, file: `country/${code}.json` };
   }) }, availableCountries.length);
   await writeJson('major.json', { version, admin1: Object.fromEntries(adminPlaces.filter(admin => availableCountries.includes(admin.cc))
     .map(admin => [`${admin.cc}.${admin.admin1}`, [admin.name, admin.zh]])), places: majorPlaces.map(place => placeTuple(place)) }, majorPlaces.length, 2_000_000);
   for (const cc of availableCountries) {
-    const countryPlaces = places.filter(place => place.cc === cc).sort(byId);
+    const countryPlaces = [...cities, ...landmarks].filter(place => place.cc === cc).sort(byId);
     const countryCities = cities.filter(city => city.cc === cc);
     await writeJson(`country/${cc}.json`, { version, code: cc,
       admin1: adminPlaces.filter(admin => admin.cc === cc).sort((a, b) => a.name.localeCompare(b.name, 'en') || a.id - b.id)

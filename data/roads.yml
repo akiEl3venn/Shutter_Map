@@ -1,0 +1,223 @@
+# Planetiler schema for the map tiles.
+# The layers and attributes are what src/map/decodeTile.ts reads: change them together, and raise tileSchemaVersion.
+schema_name: Shutter Map
+schema_description: Roads, water and named places, for drawing over a photo.
+attribution: <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>
+
+args:
+  osm_path:
+    description: OSM extract to read
+    default: data-downloads/osm/asia-latest.osm.pbf
+
+sources:
+  osm:
+    type: osm
+    local_path: '${ args.osm_path }'
+
+definitions:
+  # Named places to label and to search for. Some classes only qualify with a Wikidata link: an ordinary neighbourhood
+  # temple or park is not a landmark, and without the link there are far too many of them.
+  landmark_tags: &landmark_tags
+    tourism: [attraction, museum, viewpoint]
+    historic: [castle, memorial, monument]
+    man_made: [lighthouse, tower]
+  known_tags: &known_tags
+    __all__:
+    - wikidata: __any__
+    - __any__:
+      - amenity: [place_of_worship]
+      - tourism: [theme_park, zoo, aquarium, gallery]
+      - historic: __any__
+      - leisure: [park, garden, nature_reserve]
+      - natural: [water, bay, beach, cape]
+      - place: [square, island, islet, suburb, quarter, neighbourhood]
+  # Planetiler cannot copy tags by prefix, so the languages are listed. A language left out still works where it is
+  # spoken, through a place's own name, and elsewhere falls back to English.
+  place_attributes: &place_attributes
+    - key: kind
+      value: >-
+        ${ feature.tags.has("place", "city") ? "city"
+        : feature.tags.has("place", "town") ? "town"
+        : feature.tags.has("place", "village", "suburb", "quarter", "neighbourhood") ? "village"
+        : feature.tags.has("natural", "peak", "volcano") ? "peak"
+        : "landmark" }
+    - key: rank
+      tag_value: population
+      type: integer
+    # With a Wikidata entry a point is known beyond its street. The app ranks on this, then on height.
+    - key: min_zoom
+      include_when: '${ !feature.tags.has("place", "city", "town") }'
+      value: '${ feature.tags.has("wikidata") ? 13 : 14 }'
+      type: integer
+    - key: elevation
+      include_when:
+        natural: [peak, volcano]
+      tag_value: ele
+      type: double
+    - { key: name, tag_value: name }
+    - key: "name:zh-Hans"
+      value: '${ coalesce(feature.tags.get("name:zh-Hans"), feature.tags.get("name:zh-CN"), feature.tags.get("name:zh")) }'
+    - key: "name:zh-Hant"
+      value: '${ coalesce(feature.tags.get("name:zh-Hant"), feature.tags.get("name:zh-TW"), feature.tags.get("name:zh-HK"), feature.tags.get("name:zh")) }'
+    - { key: "name:ar", tag_value: "name:ar" }
+    - { key: "name:be", tag_value: "name:be" }
+    - { key: "name:bg", tag_value: "name:bg" }
+    - { key: "name:bn", tag_value: "name:bn" }
+    - { key: "name:bs", tag_value: "name:bs" }
+    - { key: "name:ca", tag_value: "name:ca" }
+    - { key: "name:cs", tag_value: "name:cs" }
+    - { key: "name:da", tag_value: "name:da" }
+    - { key: "name:de", tag_value: "name:de" }
+    - { key: "name:el", tag_value: "name:el" }
+    - { key: "name:en", tag_value: "name:en" }
+    - { key: "name:es", tag_value: "name:es" }
+    - { key: "name:et", tag_value: "name:et" }
+    - { key: "name:fa", tag_value: "name:fa" }
+    - { key: "name:fi", tag_value: "name:fi" }
+    - { key: "name:fr", tag_value: "name:fr" }
+    - { key: "name:he", tag_value: "name:he" }
+    - { key: "name:hi", tag_value: "name:hi" }
+    - { key: "name:hr", tag_value: "name:hr" }
+    - { key: "name:hu", tag_value: "name:hu" }
+    - { key: "name:hy", tag_value: "name:hy" }
+    - { key: "name:id", tag_value: "name:id" }
+    - { key: "name:is", tag_value: "name:is" }
+    - { key: "name:it", tag_value: "name:it" }
+    - { key: "name:ja", tag_value: "name:ja" }
+    - { key: "name:ka", tag_value: "name:ka" }
+    - { key: "name:kk", tag_value: "name:kk" }
+    - { key: "name:ko", tag_value: "name:ko" }
+    - { key: "name:lt", tag_value: "name:lt" }
+    - { key: "name:lv", tag_value: "name:lv" }
+    - { key: "name:mk", tag_value: "name:mk" }
+    - { key: "name:ms", tag_value: "name:ms" }
+    - { key: "name:nl", tag_value: "name:nl" }
+    - { key: "name:no", tag_value: "name:no" }
+    - { key: "name:pl", tag_value: "name:pl" }
+    - { key: "name:pt", tag_value: "name:pt" }
+    - { key: "name:ro", tag_value: "name:ro" }
+    - { key: "name:ru", tag_value: "name:ru" }
+    - { key: "name:sk", tag_value: "name:sk" }
+    - { key: "name:sl", tag_value: "name:sl" }
+    - { key: "name:sq", tag_value: "name:sq" }
+    - { key: "name:sr", tag_value: "name:sr" }
+    - { key: "name:sv", tag_value: "name:sv" }
+    - { key: "name:ta", tag_value: "name:ta" }
+    - { key: "name:th", tag_value: "name:th" }
+    - { key: "name:tr", tag_value: "name:tr" }
+    - { key: "name:uk", tag_value: "name:uk" }
+    - { key: "name:ur", tag_value: "name:ur" }
+    - { key: "name:vi", tag_value: "name:vi" }
+
+layers:
+- id: roads
+  buffer: 4
+  tile_post_process:
+    merge_line_strings: { min_length: 0, tolerance: 0.25, buffer: 4 }
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 5
+    include_when:
+      highway: [motorway, motorway_link, trunk, trunk_link, primary, primary_link]
+    attributes:
+    - { key: kind, value: major }
+  - source: osm
+    geometry: line
+    min_zoom: 8
+    include_when:
+      highway: [secondary, secondary_link, tertiary, tertiary_link]
+    attributes:
+    - { key: kind, value: standard }
+  - source: osm
+    geometry: line
+    min_zoom: 11
+    include_when:
+      highway: [unclassified, residential, road]
+    attributes:
+    - { key: kind, value: all }
+  - source: osm
+    geometry: line
+    min_zoom:
+      default_value: 13
+      overrides:
+        14:
+          service: [driveway, parking_aisle]
+    include_when:
+      highway: [service, pedestrian, living_street, track]
+    attributes:
+    - { key: kind, value: all }
+    - { key: minor, value: true, type: boolean }
+
+- id: hiking
+  buffer: 4
+  tile_post_process:
+    merge_line_strings: { min_length: 0, tolerance: 0.25, buffer: 4 }
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 13
+    include_when:
+      highway: [path, footway, steps, bridleway]
+    exclude_when: '${ feature.tags.has("bicycle", "designated") && feature.tags.has("foot", "no") }'
+
+- id: water
+  buffer: 4
+  tile_post_process:
+    merge_polygons: { min_area: 1, tolerance: 0.25 }
+    merge_line_strings: { min_length: 0, tolerance: 0.25, buffer: 4 }
+  features:
+  # The app only strokes water, never fills it, so the sea is its coastline, which is in OSM itself. No ocean polygons.
+  - source: osm
+    geometry: line
+    min_zoom: 4
+    include_when:
+      natural: coastline
+  - source: osm
+    geometry: polygon
+    min_zoom: 6
+    include_when:
+      natural: water
+      waterway: riverbank
+      landuse: reservoir
+  - source: osm
+    geometry: line
+    min_zoom: 9
+    include_when:
+      waterway: [river, canal]
+  - source: osm
+    geometry: line
+    min_zoom: 12
+    include_when:
+      waterway: [stream]
+
+- id: places
+  features:
+  - source: osm
+    geometry: point
+    min_zoom:
+      default_value: 12
+      overrides:
+        4: { place: city }
+        8: { place: town }
+        10: { natural: [peak, volcano] }
+        11: { place: village }
+    include_when:
+      __any__:
+      - place: [city, town, village]
+      - natural: [peak, volcano]
+      - *landmark_tags
+      - *known_tags
+    exclude_when:
+      name: ''
+    attributes: *place_attributes
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: 12
+    include_when:
+      __any__:
+      - *landmark_tags
+      - *known_tags
+    exclude_when:
+      name: ''
+    attributes: *place_attributes

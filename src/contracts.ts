@@ -6,7 +6,7 @@ export type Meters = number;
 export type ImagePixels = number;
 /** Terrain/contours are excluded from the current product scope. */
 export type LayerId = 'roads' | 'hiking' | 'water' | 'places';
-/** `roads.kind`; must match classifyRoad().detail in src/map/roadClass.ts. */
+/** `roads.kind`; classified at build time by data/roads.yml. */
 export type RoadKind = 'major' | 'standard' | 'all';
 export type PlaceKind = 'city' | 'town' | 'village' | 'peak' | 'landmark';
 /** A language code as map names use it: en, it, ja, zh (simplified), zh-Hant. */

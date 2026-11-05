@@ -326,8 +326,6 @@ export function App() {
               {import.meta.env.DEV && map.progress && <p className="muted">
                 {strings.mapDebug(map.progress.zoom, map.progress.total, map.progress.bytes, map.progress.empty)}
               </p>}
-              {import.meta.env.DEV && map.progress && map.progress.empty > 0 && map.progress.empty < map.progress.total
-                && <p className="muted">{strings.mapDevEdge}</p>}
               {(map.crashed || (map.progress && map.progress.failed > 0 && !map.rendering)) && <div className="map-failure">
                 <p className="error" role="alert">{map.crashed ? strings.mapRenderFailed : strings.mapFailed}</p>
                 <button type="button" className="secondary"

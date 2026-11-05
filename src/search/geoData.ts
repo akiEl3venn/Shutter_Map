@@ -2,7 +2,7 @@ import { prepareIndexInChunks } from './match.ts';
 import type { CountryData, MajorData, SearchIndex } from './match.ts';
 import type { CountrySummary } from './cascade.ts';
 
-export const GEO_DATA = 'geo-dev';
+export const GEO_DATA = 'geo-2026';
 let majorIndex: Promise<SearchIndex> | undefined;
 let countries: Promise<CountrySummary[]> | undefined;
 const countryData = new Map<string, Promise<CountryData>>();

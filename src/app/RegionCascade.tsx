@@ -77,9 +77,9 @@ export function RegionCascade({ countries, country, region, countriesStatus, cou
 
   return <div className="region-cascade" role="group" aria-label={strings.browseRegions}>
     <h3>{strings.browseRegions}</h3>
-    <FilterCombobox label={strings.continent} options={options.continents} value={region.continent ?? null}
+    {options.continents.length > 1 && <FilterCombobox label={strings.continent} options={options.continents} value={region.continent ?? null}
       placeholder={strings.allContinents} loading={countriesStatus === 'loading'}
-      onChange={value => onChange({ continent: value ?? undefined })} />
+      onChange={value => onChange({ continent: value ?? undefined })} />}
     <FilterCombobox label={strings.country} options={options.countries} value={region.country ?? null}
       placeholder={strings.chooseCountry} loading={countriesStatus === 'loading'}
       onChange={value => onChange({
