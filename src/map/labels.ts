@@ -136,16 +136,10 @@ export function layoutLabels(candidates: LabelCandidate[], options: Mask & {
   let containsCorner: (x: number, y: number) => boolean;
   if (options.shape === 'circle') {
     const radius = Math.min(cx, cy) - inset(options.feather);
-    // A circle is unchanged by rotation, so distance in the upright box suffices.
     containsCorner = (x, y) => Math.hypot(x - cx, y - cy) <= radius;
   } else {
     const [top, right, bottom, left] = options.feather.map(inset);
-    containsCorner = (x, y) => {
-      const dx = x - cx, dy = y - cy;
-      const layerX = cx + dx * cos + dy * sin;
-      const layerY = cy - dx * sin + dy * cos;
-      return layerX >= left && layerX <= widthPx - right && layerY >= top && layerY <= heightPx - bottom;
-    };
+    containsCorner = (x, y) => x >= left && x <= widthPx - right && y >= top && y <= heightPx - bottom;
   }
   const spacing = labelStyle.spacing * u;
   const occupied: Box[] = [];
@@ -159,7 +153,7 @@ export function layoutLabels(candidates: LabelCandidate[], options: Mask & {
     if (kind === 'peak' && placed.filter(p => p.kind === 'peak').length >= maxPeaks) continue;
     if (kind === 'landmark' && !point.focus && maxCount <= DEFAULT_LABELS && point.rank < WELL_KNOWN) continue;
     const dx = point.x - cx, dy = point.y - cy;
-    // Anchors turn with the roads. Text boxes and collisions stay in upright axes.
+    // Anchors turn with the roads. Text, its collisions and the layer's edges all stay upright.
     const x = cx + dx * cos - dy * sin;
     const y = cy + dx * sin + dy * cos;
     if (placed.some(p => p.name === name && Math.hypot(x - p.x, y - p.y) < 16 * u)) continue;

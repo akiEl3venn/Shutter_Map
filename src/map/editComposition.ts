@@ -56,7 +56,6 @@ export function createEditorState(photo: PhotoSize, coordinate: LonLat, focus: M
     softSides: [false, false, false, false] };
 }
 
-/** From the layer's own size, not its turned outline, so that turning it leaves it where it is. */
 export function anchoredCenter(anchor: Anchor, margin: Point, photo: PhotoSize, c: MapComposition): [number, number] {
   const axis = (slot: number, size: number, extent: number, gap: number) => {
     const low = extent / 2 + gap, high = size - extent / 2 - gap;
@@ -66,8 +65,8 @@ export function anchoredCenter(anchor: Anchor, margin: Point, photo: PhotoSize, 
 }
 
 /**
- * The map's center after turning the layer to `degrees`, chosen so the map turns around the landmark it is about: that
- * point stays where it is on the photo. Without one, the map simply turns around its own center.
+ * The map's center after turning it to `degrees` inside the layer, chosen so it turns around the landmark it is about:
+ * that point stays where it is on the photo. Without one, the map simply turns around its own center.
  */
 function turnedAroundFocus(c: MapComposition, degrees: number): LonLat {
   if (!c.labels.focus) return c.geographicCenter;
@@ -121,41 +120,16 @@ export function inPhotoCorner({ composition: c, anchor, offsetPx }: EditorState)
 }
 
 /**
- * The composition to draw. In a corner the photo's corner stays at full strength: fading towards it would float the map
- * off the photo's edges. So the layer reaches out until it covers that corner, and no side fades as far as it. Upright
- * this just leaves the two sides along the photo's edges hard; turned, the map goes on filling the corner, and each
- * side's fade grows back gradually as the side turns away from it.
+ * The composition to draw. In a photo's corner the two sides along its edges stay hard: fading them would float the map
+ * off the edge. A side someone asked to fade keeps its own fade.
  */
-export function drawnComposition(state: EditorState, photo: PhotoSize): MapComposition {
-  const { composition: c, anchor, marginPx, softSides } = state;
+export function drawnComposition(state: EditorState): MapComposition {
+  const { composition: c, anchor, softSides } = state;
   if (!inPhotoCorner(state)) return c;
-  const a = -c.rotationDegrees * Math.PI / 180;
-  const dx = (anchor[0] === 0 ? marginPx[0] : photo.widthPx - marginPx[0]) - c.centerPx[0];
-  const dy = (anchor[1] === 0 ? marginPx[1] : photo.heightPx - marginPx[1]) - c.centerPx[1];
-  // The corner in the layer's own axes, then how far it lies beyond each side, top first. Inside, this is negative.
-  const x = dx * Math.cos(a) - dy * Math.sin(a), y = dx * Math.sin(a) + dy * Math.cos(a);
-  const beyond = [-y - c.heightPx / 2, x - c.widthPx / 2, y - c.heightPx / 2, -x - c.widthPx / 2];
-  // A center can be half a pixel off, so under a pixel counts as on the side.
-  const reach = beyond.map((value, i) => softSides[i] || value < 1 ? 0 : Math.ceil(value));
   const key = c.shape === 'square' ? 'squarePx' : 'rectanglePx';
-  const fades = c.feather[key].map((saved, i) => {
-    const toCorner = reach[i]! - beyond[i]!;
-    return softSides[i] ? saved : Math.min(saved, toCorner < 1 ? 0 : toCorner);
-  }) as unknown as Sides;
-  const feathered = { ...c, feather: { ...c.feather, [key]: fades } };
-  if (reach.every(value => value === 0)) return feathered;
-
-  const grown = { ...feathered, widthPx: c.widthPx + reach[1]! + reach[3]!, heightPx: c.heightPx + reach[0]! + reach[2]! };
-  // The longer layer's center moves along the layer's axes, and the map's center with it, so the roads stay put.
-  const sx = (reach[1]! - reach[3]!) / 2, sy = (reach[2]! - reach[0]!) / 2;
-  const [cx, cy] = snapCenter([c.centerPx[0] + sx * Math.cos(a) + sy * Math.sin(a),
-    c.centerPx[1] - sx * Math.sin(a) + sy * Math.cos(a)], grown);
-  const px = cx - c.centerPx[0], py = cy - c.centerPx[1];
-  const worldPerPx = c.metersPerImagePixel / metersPerWorldUnit(c.geographicCenter[1]);
-  const [worldX, worldY] = lonLatToWorld(c.geographicCenter);
-  return { ...grown, centerPx: [cx, cy], geographicCenter: worldToLonLat(
-    worldX + (px * Math.cos(a) - py * Math.sin(a)) * worldPerPx,
-    clamp(worldY + (px * Math.sin(a) + py * Math.cos(a)) * worldPerPx, 0, 1)) };
+  const alongEdge = [anchor[1] === 0, anchor[0] === 2, anchor[1] === 2, anchor[0] === 0];
+  const fades = c.feather[key].map((saved, i) => alongEdge[i] && !softSides[i] ? 0 : saved) as unknown as Sides;
+  return { ...c, feather: { ...c.feather, [key]: fades } };
 }
 
 export function editComposition(state: EditorState, action: EditAction, photo: PhotoSize): EditorState {

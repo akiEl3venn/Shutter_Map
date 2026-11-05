@@ -155,8 +155,8 @@ function load(view: View, keys: TileKey[]) {
 function start(request: RenderRequest) {
   const { composition } = request;
   const coverage = limitedTileCover({ center: composition.geographicCenter,
-    // Coverage is in layer coordinates: turning the layer on the photo needs no additional tiles.
-    widthPx: composition.widthPx, heightPx: composition.heightPx, rotationDegrees: 0,
+    // The upright layer lies at an angle across the map, so a turned map needs tiles for that whole outline.
+    widthPx: composition.widthPx, heightPx: composition.heightPx, rotationDegrees: composition.rotationDegrees,
     metersPerImagePixel: composition.metersPerImagePixel,
     zoom: zoomFor(composition.metersPerImagePixel, composition.geographicCenter[1], composition.detailOffset, tileset.maxZoom),
   });

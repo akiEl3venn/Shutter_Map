@@ -12,6 +12,13 @@ export function drawOverlay(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
   const angle = target.rotationDegrees * Math.PI / 180;
   ctx.save();
   ctx.globalAlpha = target.style.opacity;
+  if (turn) {
+    // Only the map turns. Until its new lines arrive, keep the turned old picture inside the layer's upright edges.
+    ctx.beginPath();
+    if (target.shape === 'circle') ctx.arc(target.centerPx[0], target.centerPx[1], target.widthPx / 2, 0, 2 * Math.PI);
+    else ctx.rect(target.centerPx[0] - target.widthPx / 2, target.centerPx[1] - target.heightPx / 2, target.widthPx, target.heightPx);
+    ctx.clip();
+  }
   ctx.translate(target.centerPx[0] + dx * Math.cos(angle) - dy * Math.sin(angle),
     target.centerPx[1] + dx * Math.sin(angle) + dy * Math.cos(angle));
   if (turn) ctx.rotate(turn);

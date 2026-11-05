@@ -183,7 +183,6 @@ export function renderLayer(tiles: readonly PreparedTile[], composition: MapComp
   // change how Canvas tessellates a stroke well inside the circle. The final clip preserves its pixels.
   ctx.save();
   ctx.translate(rasterWidth / 2, rasterHeight / 2);
-  ctx.rotate(angle);
   ctx.translate(-width / 2, -height / 2);
   ctx.beginPath();
   if (composition.shape === 'circle') ctx.arc(width / 2, height / 2, Math.min(width, height) / 2, 0, Math.PI * 2);
@@ -210,6 +209,10 @@ export function renderLayer(tiles: readonly PreparedTile[], composition: MapComp
       for (const path of pathsToDraw(tile, layer, spacing, clip.width / outputScale)) layerCtx.stroke(path);
       layerCtx.restore();
     }
+    layerCtx.restore();
+    // The map turns; the layer's edges, and so the fade along them, stay upright.
+    layerCtx.save();
+    layerCtx.translate((rasterWidth - width) / 2, (rasterHeight - height) / 2);
     applyFade(layerCtx, composition, layer, width, height, outputScale);
     layerCtx.restore();
     ctx.globalAlpha = layerLook[layer].alpha;

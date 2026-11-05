@@ -22,7 +22,7 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, mode,
   overlay: Overlay | null;
   /** What the edits start from. */
   composition: MapComposition | null;
-  /** What is on the photo, which a layer in a corner can reach beyond. */
+  /** What is on the photo: the same layer, with a corner's hard edges applied. */
   drawn: MapComposition | null;
   mode: DragMode;
   edit: (action: EditAction) => void;
@@ -103,9 +103,8 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, mode,
       ctx.clip(); // A layer may cross the photo's edge; never paint into the letterbox.
       drawOverlay(ctx, overlay.bitmap, overlay.composition, drawn);
       if (hover || dragging) {
-        const { centerPx, widthPx, heightPx, rotationDegrees, shape } = drawn;
+        const { centerPx, widthPx, heightPx, shape } = drawn;
         ctx.translate(...centerPx);
-        ctx.rotate(rotationDegrees * Math.PI / 180);
         ctx.beginPath();
         if (shape === 'circle') ctx.arc(0, 0, widthPx / 2, 0, 2 * Math.PI);
         else ctx.rect(-widthPx / 2, -heightPx / 2, widthPx, heightPx);
