@@ -2,6 +2,7 @@ import { classifyRings, VectorTile } from '@mapbox/vector-tile';
 import type { VectorTileFeature, VectorTileLayer } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
 import type { PlaceKind, RoadKind, TileKey } from '../contracts.ts';
+import { fame } from './labels.ts';
 import { classifyRoad } from './roadClass.ts';
 
 export interface TileFeatures {
@@ -55,7 +56,8 @@ function eachFeature(layer: VectorTileLayer | undefined, visit: (feature: Vector
 function addPlace(result: TileFeatures, feature: VectorTileFeature, kind: PlaceKind, rank: number): void {
   const properties: Properties = feature.properties;
   const name = text(properties.name);
-  if (!name || feature.type !== 1) return;
+  // Some peaks are "named" after their height. A bare number tells a reader nothing.
+  if (!name || !/\p{L}/u.test(name) || feature.type !== 1) return;
   const names: TileFeatures['places'][number]['names'] = {};
   const en = text(properties['name:en']);
   const ja = text(properties['name:ja']);
@@ -70,6 +72,8 @@ function addPlace(result: TileFeatures, feature: VectorTileFeature, kind: PlaceK
     }
   }
 }
+
+const translationsOf = (properties: Properties) => Object.keys(properties).filter(key => key.startsWith('name:')).length;
 
 /** Adapt Protomaps basemap MVT to our own layers; bytes are already HTTP-decompressed. */
 export function decodeTile(bytes: ArrayBuffer, key: TileKey): TileFeatures {
@@ -112,11 +116,11 @@ export function decodeTile(bytes: ArrayBuffer, key: TileKey): TileFeatures {
   });
   eachFeature(layers.pois, (feature) => {
     const kind = text(feature.properties.kind);
+    const { properties } = feature;
     if (kind === 'peak' || kind === 'volcano') {
-      addPlace(result, feature, 'peak', numeric(feature.properties.elevation) ?? 0);
+      addPlace(result, feature, 'peak', fame(translationsOf(properties), numeric(properties.min_zoom), numeric(properties.elevation)));
     } else if (kind && landmarks.has(kind)) {
-      // Protomaps moves prominent POIs to lower zooms, so a smaller min_zoom means more famous.
-      addPlace(result, feature, 'landmark', 15 - (numeric(feature.properties.min_zoom) ?? 15));
+      addPlace(result, feature, 'landmark', fame(translationsOf(properties), numeric(properties.min_zoom)));
     }
   });
 

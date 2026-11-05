@@ -93,8 +93,23 @@ export const labelStyle = { cityFont: 54, townFont: 44, pointFont: 36, markerRad
 const LABEL_INSET = 0.34;
 
 type Box = { left: number; right: number; top: number; bottom: number };
-// Landmarks before peaks: a hilly city has dozens of peaks, which would otherwise take every label.
-const priority: Record<PlaceKind, number> = { city: 0, town: 1, landmark: 2, peak: 3, village: 4 };
+// Landmarks and peaks compete on fame alone, so Mont Blanc is not pushed out by a gorge nobody has heard of.
+const priority: Record<PlaceKind, number> = { city: 0, town: 1, landmark: 2, peak: 2, village: 3 };
+
+const FAME_PER_TRANSLATION = 1e6, FAME_PER_ZOOM = 1e4;
+/** A landmark with no translations that the map only shows from z14 on: fine to include, if someone asks for more labels. */
+const WELL_KNOWN = 2 * FAME_PER_ZOOM;
+const DEFAULT_LABELS = 5;
+
+/**
+ * How well known a landmark or peak is, as one sortable number. The more languages name a place, the more famous it is:
+ * Mont Blanc has twelve names, the peaks around it two at most. English-speaking places have few translations to go by,
+ * so next comes how early the map shows it, and then a peak's height. A landmark wins a tie against a peak of any height.
+ */
+export function fame(translations: number, minZoom = 15, height?: number): number {
+  return translations * FAME_PER_TRANSLATION + (15 - minZoom) * FAME_PER_ZOOM
+    + (height === undefined ? FAME_PER_ZOOM - 1 : Math.max(0, Math.min(height, FAME_PER_ZOOM - 2)));
+}
 
 type Mask = { shape: 'circle'; feather: number }
   | { shape: 'square' | 'rectangle'; feather: MapComposition['feather']['rectanglePx'] };
@@ -104,6 +119,8 @@ export function layoutLabels(candidates: LabelCandidate[], options: Mask & {
 }): PlacedLabel[] {
   const { widthPx, heightPx, maxCount, measure } = options;
   if (maxCount === 0) return [];
+  // Mountains have far more named peaks than fit, so the best known stand for the rest. Asking for more labels allows more.
+  const maxPeaks = Math.max(2, Math.ceil(maxCount * 0.4));
   const u = options.scalePx / 2400;
   const pad = 6 * u;
   const markerRadius = labelStyle.markerRadius * u;
@@ -135,6 +152,8 @@ export function layoutLabels(candidates: LabelCandidate[], options: Mask & {
   for (const point of sorted) {
     if (placed.length >= maxCount) break;
     const { name, kind } = point;
+    if (kind === 'peak' && placed.filter(p => p.kind === 'peak').length >= maxPeaks) continue;
+    if (kind === 'landmark' && !point.focus && maxCount <= DEFAULT_LABELS && point.rank < WELL_KNOWN) continue;
     const dx = point.x - cx, dy = point.y - cy;
     // Anchors turn with the roads. Text boxes and collisions stay in upright axes.
     const x = cx + dx * cos - dy * sin;
