@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { LayerId, MapComposition, PhotoSession } from '../contracts.ts';
 import { anchoredCenter, inPhotoCorner, MAX_RANGE_KM, MIN_LAYER_PX, MIN_RANGE_KM, type Anchor, type EditAction, type EditorState } from '../map/editComposition.ts';
 import { languageName, languageOptions, readerLanguage } from '../map/languages.ts';
-import { circleFeather, sideFeather } from '../map/style.ts';
+import { MAX_FEATHER_PERCENT, circleFeather, sideFeather } from '../map/style.ts';
 import type { DragMode } from './PhotoCanvas.tsx';
 import { scrubbedValue } from './scrub.ts';
 import { strings as s } from './strings.ts';
@@ -151,7 +151,7 @@ function Placement({ state, photo, edit, mode, setMode }: EditPanelProps) {
 
 const featherNames = [s.featherTop, s.featherRight, s.featherBottom, s.featherLeft];
 function FeatherSlider({ label, percent, change }: { label: string; percent: number; change: (n: number) => void }) {
-  return <Range label={label} min={0} max={100} value={percent} change={change}
+  return <Range label={label} min={0} max={MAX_FEATHER_PERCENT} value={percent} change={change}
     display={percent === 0 ? s.featherHard : Math.max(1, Math.round(percent)) + '%'} />;
 }
 
@@ -164,7 +164,7 @@ function Shape({ c, drawn, inCorner, edit }: { c: MapComposition; drawn: MapComp
   // Together, all four edges fade over the same width, measured against the short side.
   const shortHalf = Math.min(half[0], half[1]);
   const together = c.shape !== 'circle' && linked[c.shape] && saved.every(value => Math.abs(value - saved[0]) < 1e-6);
-  const percentTogether = Math.min(saved[0], shortHalf) / shortHalf * 100;
+  const percentTogether = Math.min(saved[0] / shortHalf * 100, MAX_FEATHER_PERCENT);
   const changeTogether = (n: number) => edit({ type: 'allFeather', value: shortHalf * n / 100 });
   return <Group title={s.editShape}>
     <Radios<MapComposition['shape']> title={s.shape} value={c.shape} change={value => edit({ type: 'shape', value })}

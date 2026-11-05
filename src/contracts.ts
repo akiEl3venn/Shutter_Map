@@ -108,11 +108,17 @@ export interface MapComposition {
     showAreas: boolean;
     focus: MapFocus | null;
   };
+  /** How far each edge fades out beyond the layer. Inside the layer the map is at full strength. */
   feather: {
     circlePx: ImagePixels;
     squarePx: readonly [top: ImagePixels, right: ImagePixels, bottom: ImagePixels, left: ImagePixels];
     rectanglePx: readonly [top: ImagePixels, right: ImagePixels, bottom: ImagePixels, left: ImagePixels];
   };
+  /**
+   * What gets drawn, in the layer's own coordinates: the layer and its fade, cut off at the photo's edges so that a wide
+   * fade costs no more than the photo itself. Without it, just the layer.
+   */
+  raster?: { x: number; y: number; width: number; height: number };
 }
 
 export interface StableRelease {

@@ -1,5 +1,5 @@
 import type { LonLat, MapComposition, TileKey } from '../contracts.ts';
-import { lonLatToWorld, metersPerWorldUnit } from './mercator.ts';
+import { lonLatToWorld, metersPerWorldUnit, worldToLonLat } from './mercator.ts';
 
 function sourcePixelsPerWorld(composition: MapComposition): number {
   return metersPerWorldUnit(composition.geographicCenter[1]) / composition.metersPerImagePixel;
@@ -18,9 +18,26 @@ export function projectToLayer(lonLat: LonLat, composition: MapComposition): [nu
   return worldToLayer(x, y, composition, sourcePixelsPerWorld(composition));
 }
 
-/** The layer is always upright on the photo: rotating turns the map inside it. */
-export function rasterSize({ widthPx, heightPx }: MapComposition, outputScale: number): [number, number] {
-  return [Math.max(1, Math.ceil(widthPx * outputScale - 1e-6)), Math.max(1, Math.ceil(heightPx * outputScale - 1e-6))];
+/** The drawn area in the layer's own coordinates. The layer is always upright on the photo: rotating turns the map inside it. */
+export function rasterOf(c: MapComposition): NonNullable<MapComposition['raster']> {
+  return c.raster ?? { x: 0, y: 0, width: c.widthPx, height: c.heightPx };
+}
+
+export function rasterSize(c: MapComposition, outputScale: number): [number, number] {
+  const { width, height } = rasterOf(c);
+  return [Math.max(1, Math.ceil(width * outputScale - 1e-6)), Math.max(1, Math.ceil(height * outputScale - 1e-6))];
+}
+
+/** The point on the map at the middle of the drawn area, which need not be the layer's middle. To choose tiles by. */
+export function rasterCenter(c: MapComposition): LonLat {
+  const { x, y, width, height } = rasterOf(c);
+  const dx = x + width / 2 - c.widthPx / 2, dy = y + height / 2 - c.heightPx / 2;
+  if (!dx && !dy) return c.geographicCenter;
+  const a = -c.rotationDegrees * Math.PI / 180;
+  const worldPerPx = c.metersPerImagePixel / metersPerWorldUnit(c.geographicCenter[1]);
+  const [worldX, worldY] = lonLatToWorld(c.geographicCenter);
+  return worldToLonLat(worldX + (dx * Math.cos(a) - dy * Math.sin(a)) * worldPerPx,
+    Math.max(0, Math.min(1, worldY + (dx * Math.sin(a) + dy * Math.cos(a)) * worldPerPx)));
 }
 
 export function hitsLayer(point: readonly [number, number], c: MapComposition): boolean {

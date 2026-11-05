@@ -57,6 +57,7 @@ export function useComposition(photo: PhotoSession | null, location: LocationCho
     edit({ type: 'localLanguages', value: localLanguages, browser: readerLanguage() });
   }, [localLanguages]);
   const editor = photo === session.photo && location ? session.editor : null;
-  const drawn = useMemo(() => editor && drawnComposition(editor), [editor]);
+  const drawn = useMemo(() => editor && photo
+    ? drawnComposition(editor, { widthPx: photo.orientedWidthPx, heightPx: photo.orientedHeightPx }) : null, [editor, photo]);
   return { editor, drawn, edit };
 }

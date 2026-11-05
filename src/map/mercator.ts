@@ -1,7 +1,7 @@
 import type { LonLat, TileKey } from '../contracts.ts';
 
 export const EARTH_CIRCUMFERENCE = 40075016.686;
-export const MAX_TILES_PER_VIEW = 100; // config/editor-policy.json
+export const MAX_TILES_PER_VIEW = 200; // config/editor-policy.json
 /**
  * Each tile spans 512–1024 source pixels. Measured with a 10 km layer on a 24 MP photo (4.2 m/px, a 100 m block
  * is 24 px): 1024 picks z12, which loses about 40% of local streets and every trail; z14 only doubles the bytes.

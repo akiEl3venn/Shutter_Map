@@ -22,7 +22,7 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, mode,
   overlay: Overlay | null;
   /** What the edits start from. */
   composition: MapComposition | null;
-  /** What is on the photo: the same layer, with a corner's hard edges applied. */
+  /** What is on the photo: the same layer, with its fade and a corner's hard edges worked out. */
   drawn: MapComposition | null;
   mode: DragMode;
   edit: (action: EditAction) => void;

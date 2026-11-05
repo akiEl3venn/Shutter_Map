@@ -2,6 +2,7 @@
 import type { TileKey } from '../contracts.ts';
 import { decodeTile } from './decodeTile.ts';
 import type { TileFeatures } from './decodeTile.ts';
+import { rasterCenter, rasterOf } from './layerGeometry.ts';
 import { limitedTileCover, zoomFor } from './mercator.ts';
 import type { TileCoverage } from './mercator.ts';
 import type { ExportLayerRequest, MapWorkerRequest, MapWorkerResponse, RenderRequest } from './mapProtocol.ts';
@@ -30,7 +31,7 @@ interface View {
 const worker = self as unknown as DedicatedWorkerGlobalScope;
 const loader = createTileLoader({ url: key => tileUrl(key.z, key.x, key.y), cacheSize: 0 });
 const cache = new Map<string, CachedTile>();
-const cacheLimit = 200;
+const cacheLimit = 300;
 const frameIntervalMs = 150;
 const partialFrameHoldMs = 200; // config/editor-policy.json
 const tileId = ({ z, x, y }: TileKey) => `${z}/${x}/${y}`;
@@ -154,9 +155,10 @@ function load(view: View, keys: TileKey[]) {
 
 function start(request: RenderRequest) {
   const { composition } = request;
-  const coverage = limitedTileCover({ center: composition.geographicCenter,
-    // The upright layer lies at an angle across the map, so a turned map needs tiles for that whole outline.
-    widthPx: composition.widthPx, heightPx: composition.heightPx, rotationDegrees: composition.rotationDegrees,
+  const raster = rasterOf(composition);
+  const coverage = limitedTileCover({ center: rasterCenter(composition),
+    // The upright drawn area lies at an angle across a turned map, so it needs tiles for that whole outline.
+    widthPx: raster.width, heightPx: raster.height, rotationDegrees: composition.rotationDegrees,
     metersPerImagePixel: composition.metersPerImagePixel,
     zoom: zoomFor(composition.metersPerImagePixel, composition.geographicCenter[1], composition.detailOffset, tileset.maxZoom),
   });

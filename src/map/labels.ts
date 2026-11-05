@@ -93,8 +93,8 @@ export interface PlacedLabel extends LabelCandidate {
 
 /** Multiples of u = scalePx / 2400. Cropping a rectangle preserves text size and spacing. */
 export const labelStyle = { cityFont: 54, townFont: 44, pointFont: 36, markerRadius: 6, gap: 6, spacing: 140 };
-/** Keep the text in the fully visible part of the roads, even at a hard edge. */
-const LABEL_INSET = 0.34;
+/** Text stays inside the layer, where the roads are at full strength, and just clear of its edge. */
+const LABEL_INSET = 8;
 
 type Box = { left: number; right: number; top: number; bottom: number };
 // Landmarks and peaks compete on fame alone, so Mont Blanc is not pushed out by a gorge nobody has heard of.
@@ -115,10 +115,8 @@ export function fame(translations: number, minZoom = 15, height?: number): numbe
     + (height === undefined ? FAME_PER_ZOOM - 1 : Math.max(0, Math.min(height, FAME_PER_ZOOM - 2)));
 }
 
-type Mask = { shape: 'circle'; feather: number }
-  | { shape: 'square' | 'rectangle'; feather: MapComposition['feather']['rectanglePx'] };
-export function layoutLabels(candidates: LabelCandidate[], options: Mask & {
-  widthPx: number; heightPx: number; scalePx: number; rotationDegrees: number; maxCount: number;
+export function layoutLabels(candidates: LabelCandidate[], options: {
+  shape: MapComposition['shape']; widthPx: number; heightPx: number; scalePx: number; rotationDegrees: number; maxCount: number;
   measure: (text: string, fontPx: number) => number;
 }): PlacedLabel[] {
   const { widthPx, heightPx, maxCount, measure } = options;
@@ -132,15 +130,10 @@ export function layoutLabels(candidates: LabelCandidate[], options: Mask & {
   const cy = heightPx / 2;
   const angle = options.rotationDegrees * Math.PI / 180;
   const cos = Math.cos(angle), sin = Math.sin(angle);
-  const inset = (feather: number) => Math.max(LABEL_INSET * feather, 8 * u);
-  let containsCorner: (x: number, y: number) => boolean;
-  if (options.shape === 'circle') {
-    const radius = Math.min(cx, cy) - inset(options.feather);
-    containsCorner = (x, y) => Math.hypot(x - cx, y - cy) <= radius;
-  } else {
-    const [top, right, bottom, left] = options.feather.map(inset);
-    containsCorner = (x, y) => x >= left && x <= widthPx - right && y >= top && y <= heightPx - bottom;
-  }
+  const inset = LABEL_INSET * u;
+  const containsCorner = options.shape === 'circle'
+    ? (x: number, y: number) => Math.hypot(x - cx, y - cy) <= Math.min(cx, cy) - inset
+    : (x: number, y: number) => x >= inset && x <= widthPx - inset && y >= inset && y <= heightPx - inset;
   const spacing = labelStyle.spacing * u;
   const occupied: Box[] = [];
   const placed: PlacedLabel[] = [];
