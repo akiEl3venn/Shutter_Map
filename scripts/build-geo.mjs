@@ -267,7 +267,7 @@ function regionFinder(features, cities) {
     // Most votes; on a tie, the country of the closest. Map keeps the order in which the countries first voted.
     const [cc] = [...votes].reduce((best, entry) => entry[1].length > best[1].length ? entry : best);
     const admin1 = voters.find(feature => feature.cc === cc && province(feature.admin1))?.admin1
-      ?? closest(point, cities.filter(city => city.cc === cc), 1)[0].admin1;
+      ?? closest(point, cities.filter(city => city.cc === cc), 1)[0]?.admin1 ?? '';
     return { cc, admin1 };
   };
 }
@@ -458,7 +458,7 @@ export async function main(args = process.argv.slice(2)) {
     : geonamesLandmarks).sort((a, b) => b.rank - a.rank || byId(a, b));
   const majorCities = cities.filter(city => city.population >= options.minimumPopulation || CITY_CENTRES.has(city.featureCode));
   const majorPlaces = [...majorCities, ...landmarks.slice(0, options.maximumLandmarks)].sort(byId);
-  const availableCountries = [...new Set(cities.map(place => place.cc))].sort();
+  const availableCountries = [...new Set([...cities, ...landmarks].map(place => place.cc))].sort();
   await mkdir(join(options.output, 'country'), { recursive: true });
   const report = [];
   async function writeJson(filename, value, entries, budget = Infinity) {
