@@ -257,7 +257,9 @@ export function App() {
               <p role="status">{exporter.state.status === 'decoding' ? strings.exportDecoding
                 : exporter.state.status === 'encoding' ? strings.exportEncoding
                 : exporter.state.status === 'done' ? strings.exportDone(exporter.state.width, exporter.state.height, exporter.state.bytes)
-                : exporter.state.status === 'idle' && !map.ready && !map.rendering ? strings.exportWaiting
+                : exporter.state.status === 'idle' && !map.ready && !map.rendering
+                  // The status in the sidebar can be scrolled out of sight, so say why here, by the button that is off.
+                  ? map.progress && map.progress.empty === map.progress.total ? strings.mapNoData : strings.exportWaiting
                 : ''}</p>
             </div>
             {exporter.state.status === 'failed' && <p className="error" role="alert">{strings.exportFailed}</p>}
