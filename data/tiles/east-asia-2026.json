@@ -1,0 +1,19 @@
+{
+  "name": "east-asia-2026",
+  "bytes": 1797184840,
+  "sha256": "e90980197fc148d6e6f83fd46b4cd97cfd394599a755c3ba08d1ee38ea8d398b",
+  "source": "https://download.geofabrik.de/asia-updates",
+  "dataTime": "2026-11-03T21:24:23Z",
+  "acquired": "2026-11-05T08:26:28.585Z",
+  "input": {
+    "name": "asia-latest.osm.pbf",
+    "bytes": 16444189993
+  },
+  "coverage": {
+    "name": "中国、港澳台、日本、韩国",
+    "polygon": "data/east-asia.poly"
+  },
+  "tool": "0.10.2",
+  "commit": "c83d4c602af3a230c6a7bb24355be1ca44e330f6",
+  "license": "ODbL, © OpenStreetMap contributors"
+}
