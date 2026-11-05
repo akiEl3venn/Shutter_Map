@@ -93,7 +93,7 @@ export interface PlacedLabel extends LabelCandidate {
 
 /** Multiples of u = scalePx / 2400. Cropping a rectangle preserves text size and spacing. */
 export const labelStyle = { cityFont: 54, townFont: 44, pointFont: 36, markerRadius: 6, gap: 6, spacing: 140 };
-/** Text stays inside the layer, where the roads are at full strength, and just clear of its edge. */
+/** Text stays inside the layer and just clear of its edge, and out of any fade reaching into it. */
 const LABEL_INSET = 8;
 
 type Box = { left: number; right: number; top: number; bottom: number };
@@ -117,6 +117,8 @@ export function fame(translations: number, minZoom = 15, height?: number): numbe
 
 export function layoutLabels(candidates: LabelCandidate[], options: {
   shape: MapComposition['shape']; widthPx: number; heightPx: number; scalePx: number; rotationDegrees: number; maxCount: number;
+  /** How far in from each edge, top first, the fade makes it a poor place for text. */
+  fadeInsets?: readonly [number, number, number, number];
   measure: (text: string, fontPx: number) => number;
 }): PlacedLabel[] {
   const { widthPx, heightPx, maxCount, measure } = options;
@@ -130,10 +132,10 @@ export function layoutLabels(candidates: LabelCandidate[], options: {
   const cy = heightPx / 2;
   const angle = options.rotationDegrees * Math.PI / 180;
   const cos = Math.cos(angle), sin = Math.sin(angle);
-  const inset = LABEL_INSET * u;
+  const [insetTop, insetRight, insetBottom, insetLeft] = (options.fadeInsets ?? [0, 0, 0, 0]).map(fade => Math.max(fade, LABEL_INSET * u)) as [number, number, number, number];
   const containsCorner = options.shape === 'circle'
-    ? (x: number, y: number) => Math.hypot(x - cx, y - cy) <= Math.min(cx, cy) - inset
-    : (x: number, y: number) => x >= inset && x <= widthPx - inset && y >= inset && y <= heightPx - inset;
+    ? (x: number, y: number) => Math.hypot(x - cx, y - cy) <= Math.min(cx, cy) - insetTop
+    : (x: number, y: number) => x >= insetLeft && x <= widthPx - insetRight && y >= insetTop && y <= heightPx - insetBottom;
   const spacing = labelStyle.spacing * u;
   const occupied: Box[] = [];
   const placed: PlacedLabel[] = [];

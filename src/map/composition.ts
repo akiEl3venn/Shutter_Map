@@ -1,8 +1,6 @@
 import type { LocationChoice, MapComposition, PhotoSession } from '../contracts.ts';
 
 export const MIN_LAYER_PX = 64; // config/editor-policy.json
-/** Of the layer's short half: how far the map fades out beyond its edges, until someone changes it. */
-const DEFAULT_FEATHER = 0.75;
 
 export function defaultComposition(
   photo: Pick<PhotoSession, 'orientedWidthPx' | 'orientedHeightPx'> | null,
@@ -27,10 +25,10 @@ export function defaultComposition(
     visibleLayers: { roads: true, hiking: false, water: true, places: true },
     labels: { language: 'en', localLanguages: [], maxCount: 5, showAreas: false, focus: null },
     feather: {
-      circlePx: size / 2 * DEFAULT_FEATHER,
-      squarePx: Array(4).fill(size / 2 * DEFAULT_FEATHER) as [number, number, number, number],
-      // A quarter of the width is half the height of the default 18:9 rectangle.
-      rectanglePx: Array(4).fill(size / 4 * DEFAULT_FEATHER) as [number, number, number, number],
+      circlePx: size / 2,
+      squarePx: [size / 2, size / 2, size / 2, size / 2],
+      // A quarter of the width is half the height of the default 18:9 rectangle: a fade of 100%.
+      rectanglePx: [size / 4, size / 4, size / 4, size / 4],
     },
   };
 }

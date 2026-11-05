@@ -2,7 +2,7 @@ import type { DetailOffset, LabelLanguage, LayerId, LonLat, MapComposition, MapF
 import { defaultComposition, MIN_LAYER_PX } from './composition.ts';
 import { languageOptions } from './languages.ts';
 import { projectToLayer, rasterSize } from './layerGeometry.ts';
-import { circleFeather, sideFeather } from './style.ts';
+import { fadeInside, fadeWidths } from './style.ts';
 import { lonLatToWorld, metersPerWorldUnit, worldToLonLat } from './mercator.ts';
 
 type Point = readonly [number, number];
@@ -121,7 +121,7 @@ export function inPhotoCorner({ composition: c, anchor, offsetPx }: EditorState)
 }
 
 /**
- * The composition to draw. The map fades out beyond the layer's edges, as far as the photo goes. In a photo's corner the
+ * The composition to draw. The map runs on beyond the layer's edges as far as its fade or the photo goes. In a photo's corner the
  * two sides along its edges stay hard: fading them would float the map off the edge. A side someone asked to fade keeps
  * its own fade.
  */
@@ -134,8 +134,8 @@ export function drawnComposition(state: EditorState, photo: PhotoSize): MapCompo
     const fades = c.feather[key].map((saved, i) => alongEdge[i] && !softSides[i] ? 0 : saved) as unknown as Sides;
     drawn = { ...c, feather: { ...c.feather, [key]: fades } };
   }
-  const circle = circleFeather(drawn);
-  const [top, right, bottom, left] = drawn.shape === 'circle' ? [circle, circle, circle, circle] : sideFeather(drawn);
+  const beyond = fadeWidths(drawn).map(feather => feather - fadeInside(feather, drawn));
+  const [top, right, bottom, left] = beyond as [number, number, number, number];
   // The layer's top-left corner on the photo is on a whole pixel, so these are too.
   const layerLeft = c.centerPx[0] - c.widthPx / 2, layerTop = c.centerPx[1] - c.heightPx / 2;
   const x = Math.max(layerLeft - Math.ceil(left), 0) - layerLeft, y = Math.max(layerTop - Math.ceil(top), 0) - layerTop;

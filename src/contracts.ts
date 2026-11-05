@@ -108,7 +108,7 @@ export interface MapComposition {
     showAreas: boolean;
     focus: MapFocus | null;
   };
-  /** How far each edge fades out beyond the layer. Inside the layer the map is at full strength. */
+  /** How wide the fade along each edge is. Style's fadeInside says how it lies across that edge. */
   feather: {
     circlePx: ImagePixels;
     squarePx: readonly [top: ImagePixels, right: ImagePixels, bottom: ImagePixels, left: ImagePixels];

@@ -2,7 +2,7 @@ import type { MapComposition } from '../contracts.ts';
 import type { TileFeatures } from './decodeTile.ts';
 import { projectToLayer, rasterOf, rasterSize, tileTransform } from './layerGeometry.ts';
 import { focusLabel, isAreaName, labelStyle, layoutLabels, markFocus, selectLabelName, type LabelCandidate, type PlacedLabel } from './labels.ts';
-import { circleFeather, fadeStops, focusColor, layerLook, lineWidths, roadSpacing, sideFeather } from './style.ts';
+import { circleFeather, fadeInside, fadeStops, focusColor, labelInsets, layerLook, lineWidths, roadSpacing, sideFeather } from './style.ts';
 import { roadTiers, TIER_COUNT, tierLimit, type PlacedRoad } from './thinRoads.ts';
 
 const strokeOrder = ['water', 'hiking', 'all', 'standard', 'major'] as const;
@@ -86,6 +86,7 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
   const labels = layoutLabels(marked, {
     widthPx: composition.widthPx, heightPx: composition.heightPx, scalePx: composition.scalePx,
     rotationDegrees: composition.rotationDegrees, maxCount: composition.labels.maxCount, shape: composition.shape,
+    fadeInsets: labelInsets(composition),
     measure(text, px) {
       ctx.font = font(px);
       return ctx.measureText(text).width;
@@ -128,7 +129,7 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
   ctx.restore();
 }
 
-/** Fade one stroke class outwards from the layer's edges, with the context's origin at the layer's top-left corner. */
+/** Fade one stroke class across the layer's edges, with the context's origin at the layer's top-left corner. */
 function applyFade(ctx: OffscreenCanvasRenderingContext2D, composition: MapComposition, layer: StrokeLayer,
   width: number, height: number, outputScale: number) {
   const { reach } = layerLook[layer];
@@ -136,29 +137,31 @@ function applyFade(ctx: OffscreenCanvasRenderingContext2D, composition: MapCompo
   const left = raster.x * outputScale, top = raster.y * outputScale;
   const canvasWidth = ctx.canvas.width, canvasHeight = ctx.canvas.height;
   if (composition.shape === 'circle') {
-    const feather = circleFeather(composition) * outputScale;
+    const feather = circleFeather(composition);
     if (feather <= 0) return;
-    const radius = width / 2;
-    const fade = ctx.createRadialGradient(width / 2, height / 2, radius, width / 2, height / 2, radius + feather * reach);
+    const start = width / 2 - fadeInside(feather, composition) * outputScale;
+    const fade = ctx.createRadialGradient(width / 2, height / 2, start, width / 2, height / 2, start + feather * outputScale * reach);
     for (const [at, alpha] of fadeStops) fade.addColorStop(at, `rgba(0,0,0,${alpha})`);
     ctx.globalCompositeOperation = 'destination-in';
     ctx.fillStyle = fade;
     ctx.fillRect(left, top, canvasWidth, canvasHeight);
   } else {
-    const [featherTop, featherRight, featherBottom, featherLeft] = sideFeather(composition).map(value => value * outputScale);
-    // Erase beyond each side independently. In the corners their alpha masks multiply.
+    const [featherTop, featherRight, featherBottom, featherLeft] = sideFeather(composition);
+    // Erase each side's band independently. In the corners their alpha masks multiply.
     ctx.globalCompositeOperation = 'destination-out';
-    const side = (feather: number, gradient: (end: number) => CanvasGradient, fillBeyond: () => void) => {
+    // Depths from the edge, into the layer: where the fade starts, and where it ends, usually beyond the edge.
+    const side = (feather: number, gradient: (start: number, end: number) => CanvasGradient, fillOutwards: (start: number) => void) => {
       if (feather <= 0) return;
-      const fade = gradient(feather * reach);
+      const start = fadeInside(feather, composition) * outputScale;
+      const fade = gradient(start, start - feather * outputScale * reach);
       for (const [at, alpha] of fadeStops) fade.addColorStop(at, `rgba(0,0,0,${1 - alpha})`);
       ctx.fillStyle = fade;
-      fillBeyond();
+      fillOutwards(start);
     };
-    side(featherTop, end => ctx.createLinearGradient(0, 0, 0, -end), () => ctx.fillRect(left, top, canvasWidth, -top));
-    side(featherRight, end => ctx.createLinearGradient(width, 0, width + end, 0), () => ctx.fillRect(width, top, canvasWidth, canvasHeight));
-    side(featherBottom, end => ctx.createLinearGradient(0, height, 0, height + end), () => ctx.fillRect(left, height, canvasWidth, canvasHeight));
-    side(featherLeft, end => ctx.createLinearGradient(0, 0, -end, 0), () => ctx.fillRect(left, top, -left, canvasHeight));
+    side(featherTop, (s, e) => ctx.createLinearGradient(0, s, 0, e), s => ctx.fillRect(left, top, canvasWidth, s - top));
+    side(featherRight, (s, e) => ctx.createLinearGradient(width - s, 0, width - e, 0), s => ctx.fillRect(width - s, top, canvasWidth, canvasHeight));
+    side(featherBottom, (s, e) => ctx.createLinearGradient(0, height - s, 0, height - e), s => ctx.fillRect(left, height - s, canvasWidth, canvasHeight));
+    side(featherLeft, (s, e) => ctx.createLinearGradient(s, 0, e, 0), s => ctx.fillRect(left, top, s - left, canvasHeight));
   }
 }
 
@@ -187,7 +190,8 @@ export function renderLayer(tiles: readonly PreparedTile[], composition: MapComp
   // A rectangle's edges are the canvas's. A circle's outer edge, where its fade ends, needs drawing.
   if (composition.shape === 'circle') {
     ctx.beginPath();
-    ctx.arc(originX + width / 2, originY + height / 2, width / 2 + circleFeather(composition) * outputScale, 0, Math.PI * 2);
+    const feather = circleFeather(composition);
+    ctx.arc(originX + width / 2, originY + height / 2, width / 2 + (feather - fadeInside(feather, composition)) * outputScale, 0, Math.PI * 2);
     ctx.clip();
   }
   for (const layer of strokeOrder) {

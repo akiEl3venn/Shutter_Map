@@ -5,8 +5,8 @@ export function lineColorFor(meanLuminance: number): string {
 }
 
 /**
- * Opacity, and how far out each class reaches as a share of the fade: smaller roads disappear sooner, and main roads run on
- * furthest. All of them start fading at the layer's edge, so everything inside it is at full strength.
+ * Opacity, and how far across the fade each class reaches: smaller roads disappear sooner, and main roads run on furthest.
+ * All of them start fading at the same place.
  */
 export const layerLook = {
   water: { alpha: 0.7, reach: 0.95 },
@@ -51,8 +51,33 @@ export const MAX_FEATHER_PERCENT = 200;
 /** A smaller layer limits the fade without overwriting a shape's saved widths. */
 export const circleFeather = (c: MapComposition) => Math.min(c.feather.circlePx, c.widthPx / 2 * MAX_FEATHER_PERCENT / 100);
 
+/** Up to this share of the layer's short half, a fade lies wholly beyond the layer, which stays at full strength. */
+const FADE_ALL_OUTSIDE = 0.75;
+/** A stronger fade is shared: this much of each further step comes into the layer, and the rest reaches further out. */
+const FURTHER_INSIDE = 0.75;
+/** Labels keep out of the fade inside the layer, but this much of the short half is as far as they are pushed in. */
+const LABEL_FADE_LIMIT = 0.34;
+const shortHalf = (c: MapComposition) => Math.min(c.widthPx, c.heightPx) / 2;
+
+/** How much of a fade of this width lies inside the layer. The rest lies beyond its edge. */
+export function fadeInside(featherPx: number, c: MapComposition): number {
+  return FURTHER_INSIDE * Math.max(0, featherPx - FADE_ALL_OUTSIDE * shortHalf(c));
+}
+
 export function sideFeather(c: MapComposition): [number, number, number, number] {
   const [top, right, bottom, left] = c.shape === 'square' ? c.feather.squarePx : c.feather.rectanglePx;
   const limit = (size: number) => size / 2 * MAX_FEATHER_PERCENT / 100;
   return [Math.min(top, limit(c.heightPx)), Math.min(right, limit(c.widthPx)), Math.min(bottom, limit(c.heightPx)), Math.min(left, limit(c.widthPx))];
+}
+
+/** The fade along each edge, top first, whatever the shape. */
+export function fadeWidths(c: MapComposition): [number, number, number, number] {
+  const circle = circleFeather(c);
+  return c.shape === 'circle' ? [circle, circle, circle, circle] : sideFeather(c);
+}
+
+export function labelInsets(c: MapComposition): [number, number, number, number] {
+  const inset = (feather: number) => Math.min(fadeInside(feather, c), LABEL_FADE_LIMIT * shortHalf(c));
+  const [top, right, bottom, left] = fadeWidths(c);
+  return [inset(top), inset(right), inset(bottom), inset(left)];
 }

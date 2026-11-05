@@ -1,6 +1,6 @@
 import type { MapComposition } from '../contracts.ts';
 import { projectToLayer, rasterOf } from './layerGeometry.ts';
-import { circleFeather } from './style.ts';
+import { circleFeather, fadeInside } from './style.ts';
 
 /** Place the last raster in source pixels, anticipating edits until the new vector frame arrives. */
 export function drawOverlay(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
@@ -17,7 +17,8 @@ export function drawOverlay(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
     // Only the map turns. Until its new lines arrive, keep the turned old picture inside what the new one will cover.
     ctx.beginPath();
     const area = rasterOf(target);
-    if (target.shape === 'circle') ctx.arc(target.centerPx[0], target.centerPx[1], target.widthPx / 2 + circleFeather(target), 0, 2 * Math.PI);
+    const feather = circleFeather(target);
+    if (target.shape === 'circle') ctx.arc(target.centerPx[0], target.centerPx[1], target.widthPx / 2 + feather - fadeInside(feather, target), 0, 2 * Math.PI);
     else ctx.rect(target.centerPx[0] - target.widthPx / 2 + area.x, target.centerPx[1] - target.heightPx / 2 + area.y, area.width, area.height);
     ctx.clip();
   }
