@@ -45,28 +45,41 @@ export interface CoverInput {
 
 function tileBounds(input: CoverInput) {
   const angle = input.rotationDegrees * Math.PI / 180;
-  const cos = Math.abs(Math.cos(angle));
-  const sin = Math.abs(Math.sin(angle));
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const absCos = Math.abs(cos);
+  const absSin = Math.abs(sin);
   const margin = input.marginPx ?? 64;
   const scale = input.metersPerImagePixel / metersPerWorldUnit(input.center[1]);
-  const halfWidth = ((input.widthPx * cos + input.heightPx * sin) / 2 + margin) * scale;
-  const halfHeight = ((input.widthPx * sin + input.heightPx * cos) / 2 + margin) * scale;
+  const halfWidth = ((input.widthPx * absCos + input.heightPx * absSin) / 2 + margin) * scale;
+  const halfHeight = ((input.widthPx * absSin + input.heightPx * absCos) / 2 + margin) * scale;
   const [cx, cy] = lonLatToWorld(input.center);
   const size = 2 ** input.zoom;
   const minX = Math.floor((cx - halfWidth) * size);
   const maxX = Math.floor((cx + halfWidth) * size);
   const minY = Math.max(0, Math.min(size - 1, Math.floor((cy - halfHeight) * size)));
   const maxY = Math.max(0, Math.min(size - 1, Math.floor((cy + halfHeight) * size)));
-  return { cx, cy, size, minX, minY, maxY, columns: Math.min(size, maxX - minX + 1) };
+  const alongWidth = (input.widthPx / 2 + margin) * scale;
+  const alongHeight = (input.heightPx / 2 + margin) * scale;
+  const tileReach = (absCos + absSin) / (2 * size);
+  /**
+   * The upright drawn area lies at an angle across a turned map, so the box around it holds up to twice the tiles it
+   * touches. A tile within the box can still miss it, along either of the area's own axes.
+   */
+  const touches = (column: number, row: number) => {
+    const dx = (column + 0.5) / size - cx, dy = (row + 0.5) / size - cy;
+    return Math.abs(dx * cos - dy * sin) <= alongWidth + tileReach && Math.abs(dx * sin + dy * cos) <= alongHeight + tileReach;
+  };
+  return { cx, cy, size, minX, minY, maxY, columns: Math.min(size, maxX - minX + 1), touches };
 }
 
-/** Exact rectangular footprint at the requested zoom, including drawing margin. */
+/** Exact footprint at the requested zoom, including drawing margin. */
 export function tileCover(input: CoverInput): TileKey[] {
-  const { cx, cy, size, minX, minY, maxY, columns } = tileBounds(input);
+  const { cx, cy, size, minX, minY, maxY, columns, touches } = tileBounds(input);
   const keys: TileKey[] = [];
   for (let column = 0; column < columns; column += 1) {
     const x = wrap(minX + column, size);
-    for (let y = minY; y <= maxY; y += 1) keys.push({ z: input.zoom, x, y });
+    for (let y = minY; y <= maxY; y += 1) if (touches(minX + column, y)) keys.push({ z: input.zoom, x, y });
   }
   const distance = ({ x, y }: TileKey) => {
     const dx = Math.abs((x + 0.5) / size - cx);
@@ -81,13 +94,21 @@ export interface TileCoverage {
   detailReduced: boolean;
 }
 
+function tileCount(input: CoverInput): number {
+  const { minX, minY, maxY, columns, touches } = tileBounds(input);
+  const box = columns * (maxY - minY + 1);
+  // A turned area still fills a good part of its box, so a box this far over the limit needs no counting.
+  if (box > MAX_TILES_PER_VIEW * 8) return box;
+  let count = 0;
+  for (let column = 0; column < columns; column += 1) {
+    for (let y = minY; y <= maxY; y += 1) if (touches(minX + column, y)) count += 1;
+  }
+  return count;
+}
+
 /** Count before allocating so very detailed views cannot create huge request lists. */
 export function limitedTileCover(input: CoverInput): TileCoverage {
   let zoom = input.zoom;
-  while (zoom > 0) {
-    const bounds = tileBounds({ ...input, zoom });
-    if (bounds.columns * (bounds.maxY - bounds.minY + 1) <= MAX_TILES_PER_VIEW) break;
-    zoom -= 1;
-  }
+  while (zoom > 0 && tileCount({ ...input, zoom }) > MAX_TILES_PER_VIEW) zoom -= 1;
   return { keys: tileCover({ ...input, zoom }), zoom, detailReduced: zoom < input.zoom };
 }
