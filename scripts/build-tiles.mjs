@@ -11,13 +11,13 @@ import { FsSource } from './dev-tiles.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const run = promisify(execFile);
 const options = {
-  osm: 'data-downloads/osm/asia-latest.osm.pbf', polygon: 'data/east-asia.poly',
-  name: 'east-asia-2026', heap: '12g', skipBuild: false,
+  osm: 'data-downloads/osm/asia-latest.osm.pbf', polygon: 'data/china.poly', coverage: '中国大陆和港澳台',
+  name: 'china-2026', heap: '12g', skipBuild: false,
 };
 for (let i = 2; i < process.argv.length; i++) {
   const arg = process.argv[i];
   if (arg === '--skip-build') { options.skipBuild = true; continue; }
-  if (!['--osm', '--polygon', '--name', '--heap'].includes(arg)) throw new Error(`Unknown option: ${arg}`);
+  if (!['--osm', '--polygon', '--coverage', '--name', '--heap'].includes(arg)) throw new Error(`Unknown option: ${arg}`);
   const value = process.argv[++i];
   if (!value || value.startsWith('--')) throw new Error(`Missing value for ${arg}`);
   options[arg.slice(2)] = value;
@@ -70,7 +70,7 @@ const manifest = {
   dataTime: required('planetiler:osm:osmosisreplicationtime'),
   acquired: input.mtime.toISOString(),
   input: { name: basename(osm), bytes: input.size },
-  coverage: { name: '中国、港澳台、日本、韩国', polygon: relative(root, polygon).replaceAll('\\', '/') },
+  coverage: { name: options.coverage, polygon: relative(root, polygon).replaceAll('\\', '/') },
   tool: required('planetiler:version'),
   commit: head.trim() + (dirty.trim() ? '-dirty' : ''),
   license: 'ODbL, © OpenStreetMap contributors',

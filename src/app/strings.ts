@@ -32,7 +32,7 @@ export const strings = {
   mapWaiting: '选择照片和位置后加载地图数据',
   mapStarting: '正在加载地图数据…',
   mapReady: '地图数据已就绪',
-  mapNoData: '这里没有地图数据。封闭测试目前只覆盖中国、港澳台、日本和韩国。',
+  mapNoData: '这里没有地图数据。封闭测试目前只覆盖中国大陆和港澳台。',
   mapReduced: '已自动降低细节',
   mapProgress: (loaded: number, total: number) => `正在加载地图数据 ${loaded}/${total}`,
   mapDebug: (zoom: number, total: number, bytes: number, empty: number) =>
@@ -84,7 +84,7 @@ export const strings = {
   geoLoading: '正在加载地名数据…',
   geoFailed: '地名数据加载失败',
   retry: '重试',
-  noResults: '没有找到，换个写法试试。封闭测试目前只覆盖中国、港澳台、日本和韩国。',
+  noResults: '没有找到，换个写法试试。封闭测试目前只覆盖中国大陆和港澳台。',
   typeMore: '再输入一个字',
   resultsLabel: '地点搜索结果',
   resultsCount: (count: number) => `${count} 条结果，可用上下键选择，回车确认。`,
