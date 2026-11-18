@@ -15,12 +15,13 @@ export function MaskToolbar({ state, edit }: { state: MaskState; edit: (action: 
       change={value => edit({ type: 'tool', value })} />
     <Radios title={s.maskMode} value={tools.mode} options={[[ 'add', s.maskAdd ], [ 'erase', s.maskErase ]]}
       change={value => edit({ type: 'mode', value })} />
-    {tools.tool === 'brush' && <div className="mask-slider">
+    {/* Always there, so that switching tools never changes the toolbar's height and with it the photo's size. */}
+    <fieldset className="mask-slider" disabled={tools.tool !== 'brush'}>
       <NumberField label={s.maskSize} value={tools.sizePx} min={1} max={sizeLimit} log unit="px" change={size} />
       <Range compact label={s.maskSize} min={0} max={1} step={0.001}
         value={sizeLimit > 1 ? Math.log(tools.sizePx) / Math.log(sizeLimit) : 0}
         display={tools.sizePx + ' px'} change={t => size(Math.round(sizeLimit ** t))} />
-    </div>}
+    </fieldset>
     <div className="mask-slider">
       <NumberField label={s.maskFeather} value={feather} min={0} max={featherLimit}
         unit={feather ? 'px' : s.featherHard} change={fade} />

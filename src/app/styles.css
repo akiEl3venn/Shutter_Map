@@ -175,12 +175,14 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
 
 .mask-panel .muted { margin: 0 0 .75rem; }
 .mask-panel button + button { margin-left: .5rem; }
-.mask-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding-bottom: .75rem; margin-bottom: .75rem; border-bottom: 1px solid var(--line); font-size: .875rem; }
+.mask-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; font-size: .875rem; }
+.mask-toolbar fieldset:disabled { opacity: .55; }
 .mask-toolbar fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .mask-toolbar legend { color: var(--muted); padding: 0; }
 .mask-toolbar input { accent-color: var(--accent); }
 .mask-slider { width: 8.5rem; max-width: 100%; }
 .mask-slider .edit-number { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .5rem; }
 .mask-slider small { white-space: nowrap; }
-.mask-actions { display: flex; flex-wrap: wrap; gap: .375rem; }
-.mask-hint { flex-basis: 100%; }
+/* The hint shares a row with the buttons, keeping the toolbar about as low as the export controls it stands in for. */
+.mask-actions { display: flex; flex-wrap: wrap; gap: .375rem; order: 2; margin-left: auto; }
+.mask-hint { order: 1; flex: 1 1 16rem; margin: 0; }

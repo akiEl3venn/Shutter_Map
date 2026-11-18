@@ -247,32 +247,34 @@ export function App() {
             </div>}
           </section>
           {photo && <section className="export-panel" aria-label={strings.exportTitle}>
-            {masks.editing && <MaskToolbar state={masks} edit={editMasks} />}
-            <div className="export-controls">
-              <label>{strings.exportFormat}
-                <select value={exporter.format} disabled={busy}
-                  onChange={event => exporter.chooseFormat(event.currentTarget.value as ExportFormat)}>
-                  {Object.entries(exportFormats).map(([key, details]) =>
-                    <option key={key} value={key}>{details.label}</option>)}
-                </select>
-              </label>
-              <button type="button" disabled={loading || !map.ready || busy}
-                onClick={() => void exporter.start()}>{strings.exportAction}</button>
-              {editor && <button type="button" className="secondary"
-                onClick={() => document.getElementById('edit-panel')?.scrollIntoView({ behavior: 'smooth' })}>{strings.editJump}</button>}
-              <p role="status">{exporter.state.status === 'decoding' ? strings.exportDecoding
-                : exporter.state.status === 'encoding' ? strings.exportEncoding
-                : exporter.state.status === 'done' ? strings.exportDone(exporter.state.width, exporter.state.height, exporter.state.bytes)
-                : exporter.state.status === 'idle' && !map.ready && !map.rendering
-                  // The status in the sidebar can be scrolled out of sight, so say why here, by the button that is off.
-                  ? map.progress && map.progress.empty === map.progress.total ? strings.mapNoData : strings.exportWaiting
-                : ''}</p>
-            </div>
-            {exporter.state.status === 'failed' && <p className="error" role="alert">{strings.exportFailed}</p>}
-            {!exportFormats[exporter.format].alpha && <p className="muted">{strings.exportNoAlpha}</p>}
-            {exporter.format === 'gif' && <p className="muted">{strings.exportGifNote}</p>}
-            {photo.sourceFormat === 'heic' && <p className="muted">{strings.exportHeicUnavailable}</p>}
-            <p className="muted">{strings.exportNote}</p>
+            {/* In its place, not above it: a taller panel would shrink the photo just as the tracing starts. */}
+            {masks.editing ? <MaskToolbar state={masks} edit={editMasks} /> : <>
+              <div className="export-controls">
+                <label>{strings.exportFormat}
+                  <select value={exporter.format} disabled={busy}
+                    onChange={event => exporter.chooseFormat(event.currentTarget.value as ExportFormat)}>
+                    {Object.entries(exportFormats).map(([key, details]) =>
+                      <option key={key} value={key}>{details.label}</option>)}
+                  </select>
+                </label>
+                <button type="button" disabled={loading || !map.ready || busy}
+                  onClick={() => void exporter.start()}>{strings.exportAction}</button>
+                {editor && <button type="button" className="secondary"
+                  onClick={() => document.getElementById('edit-panel')?.scrollIntoView({ behavior: 'smooth' })}>{strings.editJump}</button>}
+                <p role="status">{exporter.state.status === 'decoding' ? strings.exportDecoding
+                  : exporter.state.status === 'encoding' ? strings.exportEncoding
+                  : exporter.state.status === 'done' ? strings.exportDone(exporter.state.width, exporter.state.height, exporter.state.bytes)
+                  : exporter.state.status === 'idle' && !map.ready && !map.rendering
+                    // The status in the sidebar can be scrolled out of sight, so say why here, by the button that is off.
+                    ? map.progress && map.progress.empty === map.progress.total ? strings.mapNoData : strings.exportWaiting
+                  : ''}</p>
+              </div>
+              {exporter.state.status === 'failed' && <p className="error" role="alert">{strings.exportFailed}</p>}
+              {!exportFormats[exporter.format].alpha && <p className="muted">{strings.exportNoAlpha}</p>}
+              {exporter.format === 'gif' && <p className="muted">{strings.exportGifNote}</p>}
+              {photo.sourceFormat === 'heic' && <p className="muted">{strings.exportHeicUnavailable}</p>}
+              <p className="muted">{strings.exportNote}</p>
+            </>}
           </section>}
           <footer className="stage-footer">
             <p>{strings.geoAttribution}</p>
