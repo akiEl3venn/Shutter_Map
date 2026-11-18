@@ -77,7 +77,7 @@ export const strings = {
   maskSize: '大小', maskFeather: '羽化', maskShow: '显示遮罩范围',
   maskUndo: '撤销', maskRedo: '重做',
   maskHints: {
-    pen: '单击放角点，按住拖动放曲线点；点第一个点或按 Enter 闭合。拖动已有的点可以调整。',
+    pen: '单击放角点，按住拖动放曲线点；点第一个点或按 Enter 闭合。拖动已有的点可以调整，单击则在它上面放点。',
     lasso: '按住沿边缘画一圈，松开自动闭合。',
     brush: '按住涂抹，[ 和 ] 调整大小。',
   },

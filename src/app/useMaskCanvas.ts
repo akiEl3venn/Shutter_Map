@@ -7,7 +7,7 @@ import { MaskPreview } from './maskPreview.ts';
 type Event = PointerEvent<HTMLCanvasElement>;
 type Gesture = { id: number; kind: 'stroke'; op: Stroke }
   | { id: number; kind: 'pen'; from: Point; handle: boolean }
-  | { id: number; kind: 'move'; from: Point; vertex: NonNullable<Exclude<PenHit, 'close'>> };
+  | { id: number; kind: 'move'; from: Point; vertex: NonNullable<Exclude<PenHit, 'close'>>; moved: boolean };
 
 function shortcut(e: KeyboardEvent, state: MaskState): MaskAction | undefined {
   const key = e.key.toLowerCase();
@@ -73,9 +73,9 @@ export function useMaskCanvas(state: MaskState, dispatch: (action: MaskAction) =
     if (tool === 'pen') {
       const hit = penHit(state, point, (e.pointerType === 'touch' ? 18 : 10) * px);
       if (hit === 'close') { dispatch({type: 'close'}); return; }
+      // Next door's corner is often this outline's corner too: a tap places a point on it, a drag moves it.
       if (hit) {
-        gesture.current = {kind: 'move', id, from: point, vertex: hit};
-        dispatch({type: 'beginMove', opIndex: hit.opIndex, pointIndex: hit.pointIndex});
+        gesture.current = {kind: 'move', id, from: point, vertex: hit, moved: false};
       } else {
         gesture.current = {kind: 'pen', id, from: point, handle: false};
         dispatch({type: 'penPoint', point: p});
@@ -105,7 +105,14 @@ export function useMaskCanvas(state: MaskState, dispatch: (action: MaskAction) =
       const dx = point[0] - active.from[0], dy = point[1] - active.from[1];
       if (active.kind === 'move') {
         const {start, opIndex, pointIndex} = active.vertex;
-        dispatch({type: 'move', opIndex, pointIndex, point: [start[0] + dx, start[1] + dy]});
+        if (active.moved || Math.hypot(dx, dy) > 4 * px) {
+          // Only a real drag becomes a step to undo.
+          if (!active.moved) dispatch({type: 'beginMove', opIndex, pointIndex});
+          active.moved = true;
+          dispatch({type: 'move', opIndex, pointIndex, point: [start[0] + dx, start[1] + dy]});
+        } else if (finish) {
+          dispatch({type: 'penPoint', point: start});
+        }
       } else if (active.handle || Math.hypot(dx, dy) > 4 * px) {
         active.handle = true;
         dispatch({type: 'penHandle', point});
