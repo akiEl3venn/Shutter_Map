@@ -1,0 +1,22 @@
+# Tiles for the photo tool: /<name>/<z>/<x>/<y>.mvt reads <name>.pmtiles from R2.
+# Deploying needs the owner's go-ahead (linework-photo/tasks/alpha-deploy.md).
+name = "shutter-map-tiles"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+# Only the custom domain: requests through workers.dev are never edge-cached.
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "tiles.akiel3venn.com", custom_domain = true }]
+
+# Tile URLs carry the area a photo is in; keep no request logs.
+[observability]
+enabled = false
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "shutter-map-tiles"
+
+[vars]
+ALLOWED_ORIGINS = "https://akiel3venn.com"
+# An archive's name carries its year, and its contents never change.
+CACHE_CONTROL = "public, max-age=31536000, immutable"
