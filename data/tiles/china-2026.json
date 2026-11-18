@@ -1,0 +1,19 @@
+{
+  "name": "china-2026",
+  "bytes": 1214010783,
+  "sha256": "25f3f349a7a120ab98d6fc5ecb959df1f9870130c0fad2c9ea603605ef09f26f",
+  "source": "https://download.geofabrik.de/asia-updates",
+  "dataTime": "2026-11-03T21:24:23Z",
+  "acquired": "2026-11-05T08:26:28.585Z",
+  "input": {
+    "name": "asia-latest.osm.pbf",
+    "bytes": 16444189993
+  },
+  "coverage": {
+    "name": "中国大陆和港澳台",
+    "polygon": "data/china.poly"
+  },
+  "tool": "0.10.2",
+  "commit": "01d5f6d451fe5e2e9c53ae948344491d51810954",
+  "license": "ODbL, © OpenStreetMap contributors"
+}
