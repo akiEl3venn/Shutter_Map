@@ -17,6 +17,7 @@ binding = "BUCKET"
 bucket_name = "shutter-map-tiles"
 
 [vars]
-ALLOWED_ORIGINS = "https://akiel3venn.com"
+# Comma-separated with no spaces: the Worker compares each entry to the Origin header as is.
+ALLOWED_ORIGINS = "https://akiel3venn.com,https://www.akiel3venn.com"
 # An archive's name carries its year, and its contents never change.
 CACHE_CONTROL = "public, max-age=31536000, immutable"
