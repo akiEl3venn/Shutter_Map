@@ -172,3 +172,15 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
 .edit-labels > label:first-child { display: flex; align-items: center; justify-content: space-between; }
 .edit-labels select { max-width: 100%; min-height: 38px; border: 1px solid #868d81; border-radius: 5px; padding: 0.25rem 0.5rem; font: inherit; }
 .edit-labels:disabled { color: var(--muted); opacity: 0.7; }
+
+.mask-panel .muted { margin: 0 0 .75rem; }
+.mask-panel button + button { margin-left: .5rem; }
+.mask-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding-bottom: .75rem; margin-bottom: .75rem; border-bottom: 1px solid var(--line); font-size: .875rem; }
+.mask-toolbar fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.mask-toolbar legend { color: var(--muted); padding: 0; }
+.mask-toolbar input { accent-color: var(--accent); }
+.mask-slider { width: 8.5rem; max-width: 100%; }
+.mask-slider .edit-number { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .5rem; }
+.mask-slider small { white-space: nowrap; }
+.mask-actions { display: flex; flex-wrap: wrap; gap: .375rem; }
+.mask-hint { flex-basis: 100%; }

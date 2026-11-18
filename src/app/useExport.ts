@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import type { MapComposition, PhotoSession } from '../contracts.ts';
+import type { MapComposition, PhotoSession, Mask } from '../contracts.ts';
 import { defaultExportFormat, exportFileName, type ExportFormat } from '../export/formats.ts';
 import { runExport } from '../export/exportClient.ts';
 import { decodeImage } from '../photo/decode.ts';
@@ -11,7 +11,7 @@ export type ExportState =
   | { status: 'done'; width: number; height: number; bytes: number };
 
 export function useExport(photo: PhotoSession | null, composition: MapComposition | null,
-  exportLayer: () => Promise<{ bitmap: ImageBitmap; composition: MapComposition }>) {
+  exportLayer: () => Promise<{ bitmap: ImageBitmap; composition: MapComposition }>, mask: Mask) {
   const [format, setFormat] = useState<ExportFormat>('png');
   const [state, setState] = useState<ExportState>({ status: 'idle' });
   const running = useRef<{ cancel?: () => void } | null>(null);
@@ -30,7 +30,7 @@ export function useExport(photo: PhotoSession | null, composition: MapCompositio
   useLayoutEffect(() => {
     setState({ status: 'idle' });
     return stop;
-  }, [photo, composition, stop]);
+  }, [photo, composition, mask, stop]);
   useLayoutEffect(() => {
     if (photo) setFormat(defaultExportFormat(photo.sourceFormat));
   }, [photo]);
@@ -53,7 +53,7 @@ export function useExport(photo: PhotoSession | null, composition: MapCompositio
       if (!live()) return;
       if (renderKey(rendered.composition) !== renderKey(composition)) throw new Error('view-changed');
       setState({ status: 'encoding' });
-      const encoding = runExport({ photo: source, layer, composition, format });
+      const encoding = runExport({ photo: source, layer, composition, format, mask });
       source = layer = undefined; // The export client/worker owns both bitmaps now.
       job.cancel = encoding.cancel;
       const blob = await encoding.result;

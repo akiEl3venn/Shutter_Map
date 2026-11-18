@@ -20,7 +20,7 @@ function Group({ title, first, children }: { title: string; first?: boolean; chi
   return <details open={first}><summary>{title}</summary><div className="edit-group">{children}</div></details>;
 }
 
-function Radios<T extends string | number>({ title, value, options, change }: {
+export function Radios<T extends string | number>({ title, value, options, change }: {
   title: string; value: T; options: readonly (readonly [T, string])[]; change: (choice: T) => void;
 }) {
   const group = useId();
@@ -36,7 +36,7 @@ interface NumericProps {
 }
 
 /** Keep an incomplete typed value until commit, while idle fields always reflect the reducer. */
-function NumberField({ label, value, min, max, step = 1, unit, log, change }: NumericProps) {
+export function NumberField({ label, value, min, max, step = 1, unit, log, change }: NumericProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const drag = useRef<{ id: number; x: number; start: number; moved: boolean } | null>(null);
   return <label className="edit-number"><span>{label}</span><span className="edit-number-box">
@@ -76,7 +76,7 @@ function NumberField({ label, value, min, max, step = 1, unit, log, change }: Nu
   </span></label>;
 }
 
-function Range({ label, value, min, max, step = 1, display, change, compact }: {
+export function Range({ label, value, min, max, step = 1, display, change, compact }: {
   label: string; value: number; min: number; max: number; step?: number; display: string;
   change: (value: number) => void; compact?: boolean;
 }) {

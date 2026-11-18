@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
-import type { MapComposition } from '../contracts.ts';
+import type { MapComposition, Mask } from '../contracts.ts';
 import { drawOverlay } from '../map/composite.ts';
+import { drawMask, maskBounds } from '../map/mask.ts';
 import { encodeImage } from './encode.ts';
 import { exportFormats, type ExportFormat } from './formats.ts';
 
@@ -8,11 +9,12 @@ export interface ExportJob {
   photo: ImageBitmap;
   layer: ImageBitmap;
   composition: MapComposition;
+  mask: Mask;
   format: ExportFormat;
 }
 export type ExportReply = { blob: Blob } | { failed: true };
 
-function compose({ photo, layer, composition, format }: ExportJob) {
+function compose({ photo, layer, composition, mask, format }: ExportJob) {
   const { width, height } = photo;
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' });
@@ -26,9 +28,20 @@ function compose({ photo, layer, composition, format }: ExportJob) {
     ctx.fillRect(0, 0, width, height);
   }
   ctx.drawImage(photo, 0, 0);
-  photo.close();
   drawOverlay(ctx, layer, composition, composition);
   layer.close();
+  const box = maskBounds(mask, width, height);
+  if (box) {
+    const cut = new OffscreenCanvas(box.width, box.height);
+    const cutCtx = cut.getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' });
+    if (!cutCtx) throw new Error('canvas-unavailable');
+    drawMask(cutCtx, mask, 1, [box.x, box.y]);
+    cutCtx.globalCompositeOperation = 'source-in';
+    cutCtx.drawImage(photo, -box.x, -box.y);
+    ctx.drawImage(cut, box.x, box.y);
+    cut.width = cut.height = 0;
+  }
+  photo.close();
   return { canvas, ctx };
 }
 

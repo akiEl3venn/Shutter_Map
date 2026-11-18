@@ -20,6 +20,8 @@ import { focusFor } from '../map/labels.ts';
 import { useMapPreview } from './useMapPreview.ts';
 import { exportFormats, type ExportFormat } from '../export/formats.ts';
 import { useExport } from './useExport.ts';
+import { useMasks } from './useMasks.ts';
+import { MaskToolbar } from './MaskToolbar.tsx';
 
 export function App() {
   const [photo, setPhoto] = useState<PhotoSession | null>(null);
@@ -44,7 +46,9 @@ export function App() {
   const dragDepth = useRef(0);
   const { editor, drawn, edit } = useComposition(photo, location);
   const map = useMapPreview(photo, preview, drawn);
-  const exporter = useExport(photo, drawn, map.exportLayer);
+  const { masks, editMasks } = useMasks(photo);
+  const exporter = useExport(photo, drawn, map.exportLayer, masks.mask);
+  const previewArea = useRef<HTMLElement>(null);
   const busy = exporter.state.status === 'decoding' || exporter.state.status === 'encoding';
 
   // Release a bitmap only after React has committed its replacement, so no draw can see it closed.
@@ -233,15 +237,17 @@ export function App() {
         }} />
       <div className="workspace" aria-busy={loading}>
         <div className="stage">
-          <section className="preview-area" aria-label={strings.previewLabel}>
+          <section ref={previewArea} className="preview-area" aria-label={strings.previewLabel}>
             <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} composition={editor?.composition ?? null} drawn={drawn}
-              edit={edit} choosePoint={coordinate => chooseLocation({ source: 'coordinate', coordinate, focus: focusFor(location) })} />
+              masks={masks} editMasks={editMasks} edit={edit}
+              choosePoint={coordinate => chooseLocation({ source: 'coordinate', coordinate, focus: focusFor(location) })} />
             {!photo && <div className="empty-preview">
               <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
               <p>{strings.dropHint}</p><p className="muted">{strings.formatHint}</p>
             </div>}
           </section>
           {photo && <section className="export-panel" aria-label={strings.exportTitle}>
+            {masks.editing && <MaskToolbar state={masks} edit={editMasks} />}
             <div className="export-controls">
               <label>{strings.exportFormat}
                 <select value={exporter.format} disabled={busy}
@@ -336,6 +342,16 @@ export function App() {
             </div>
           </section>
           {photo && editor && drawn && <EditPanel state={editor} drawn={drawn} photo={photo} edit={edit} />}
+          {photo && editor && drawn && <section className="mask-panel" aria-labelledby="mask-title">
+            <h2 id="mask-title">{strings.maskTitle}</h2>
+            <p className="muted">{strings.maskNote}</p>
+            <button type="button" aria-pressed={masks.editing} onClick={() => {
+              editMasks({ type: masks.editing ? 'finish' : 'start' });
+              if (!masks.editing) previewArea.current?.scrollIntoView({ block: 'nearest' });
+            }}>{masks.editing ? strings.maskDone : strings.maskStart}</button>
+            {masks.mask.length > 0 && <button type="button" className="secondary"
+              onClick={() => editMasks({ type: 'clear' })}>{strings.maskClear}</button>}
+          </section>}
           <div className="status-area">
             <p className="status" role="status">{loading ? loadingMessage : error ? '' : photo ? strings.loaded : strings.waiting}</p>
             {error && <p className="error" role="alert">{error}</p>}

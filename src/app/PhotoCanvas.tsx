@@ -3,6 +3,8 @@ import type { MapComposition, PhotoSession, LonLat } from '../contracts.ts';
 import { drawOverlay } from '../map/composite.ts';
 import { pannedCenter, type EditAction } from '../map/editComposition.ts';
 import { strings } from './strings.ts';
+import { useMaskCanvas } from './useMaskCanvas.ts';
+import type { MaskAction, MaskState } from './maskEditor.ts';
 
 export interface Overlay {
   bitmap: ImageBitmap;
@@ -14,7 +16,7 @@ export interface Overlay {
 type Point = readonly [number, number];
 type Drag = { id: number; from: Point; start: MapComposition; moved: boolean };
 
-export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit, choosePoint }: {
+export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit, choosePoint, masks, editMasks }: {
   preview: ImageBitmap | null;
   photo: PhotoSession | null;
   overlay: Overlay | null;
@@ -24,13 +26,16 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
   drawn: MapComposition | null;
   edit: (action: EditAction) => void;
   choosePoint: (point: LonLat) => void;
+  masks: MaskState;
+  editMasks: (action: MaskAction) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const redraw = useRef<() => void>(() => {});
   const drag = useRef<Drag | null>(null);
   const [hover, setHover] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const interactive = !!composition && !!drawn && !!photo && overlay?.photo === photo;
+  const interactive = !masks.editing && !!composition && !!drawn && !!photo && overlay?.photo === photo;
+  const maskCanvas = useMaskCanvas(masks, editMasks, preview, redraw, canvasRef);
   useLayoutEffect(() => {
     drag.current = null;
     setDragging(false);
@@ -90,16 +95,18 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(preview, 0, 0, photo.orientedWidthPx, photo.orientedHeightPx);
-      if (overlay?.photo !== photo || !drawn) return;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, photo.orientedWidthPx, photo.orientedHeightPx);
-      ctx.clip(); // A layer may cross the photo's edge; never paint into the letterbox.
-      drawOverlay(ctx, overlay.bitmap, overlay.composition, drawn);
-      ctx.restore();
+      if (overlay?.photo === photo && drawn) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, photo.orientedWidthPx, photo.orientedHeightPx);
+        ctx.clip(); // A layer may cross the photo's edge; never paint into the letterbox.
+        drawOverlay(ctx, overlay.bitmap, overlay.composition, drawn);
+        ctx.restore();
+      }
+      maskCanvas.draw(ctx, photo.orientedWidthPx, photo.orientedHeightPx, dpr / scale);
     };
     redraw.current();
-  }, [preview, photo, overlay, drawn]);
+  }, [preview, photo, overlay, drawn, masks]);
 
   useLayoutEffect(() => {
     const draw = () => redraw.current();
@@ -112,8 +119,11 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
     };
   }, []);
   return <canvas ref={canvasRef} aria-label={strings.previewLabel} role="img"
-    style={{ touchAction: interactive ? 'none' : undefined, cursor: dragging ? 'grabbing' : hover ? 'grab' : undefined }}
+    tabIndex={masks.editing ? 0 : undefined}
+    style={{ touchAction: interactive || masks.editing ? 'none' : undefined,
+      cursor: masks.editing ? 'crosshair' : dragging ? 'grabbing' : hover ? 'grab' : undefined }}
     onPointerDown={e => {
+      if (masks.editing) { maskCanvas.down(e); return; }
       if (!interactive || drag.current || e.button !== 0) return;
       const from = point(e);
       if (!hit(from)) return;
@@ -121,9 +131,11 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
       drag.current = { id: e.pointerId, from, start: composition!, moved: false };
       setDragging(true);
     }}
-    onPointerMove={e => move(e)} onPointerUp={e => move(e, true)}
-    onPointerLeave={() => setHover(false)}
-    onLostPointerCapture={() => {
+    onPointerMove={e => masks.editing ? maskCanvas.move(e) : move(e)}
+    onPointerUp={e => masks.editing ? maskCanvas.move(e, true) : move(e, true)}
+    onPointerLeave={() => masks.editing ? maskCanvas.leave() : setHover(false)}
+    onLostPointerCapture={e => {
+      if (masks.editing) { maskCanvas.cancel(e.pointerId); return; }
       const d = drag.current;
       if (!d) return;
       if (d.moved && composition) choosePoint(composition.geographicCenter);

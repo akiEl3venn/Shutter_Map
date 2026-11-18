@@ -4,6 +4,19 @@ import type { ImageFormat } from './photo/sniff.ts';
 export type LonLat = readonly [longitude: number, latitude: number];
 export type Meters = number;
 export type ImagePixels = number;
+export type Point = readonly [x: ImagePixels, y: ImagePixels];
+/** A curve arrives along the incoming handle and leaves along the outgoing handle. */
+export interface PenPoint { at: Point; in?: Point; out?: Point }
+/** Feather spans both sides of the outline, half on each side. */
+interface MaskOpBase { mode: 'add' | 'erase'; featherPx: ImagePixels }
+export type MaskOp = MaskOpBase & (
+  | { tool: 'pen'; points: readonly PenPoint[] }
+  | { tool: 'lasso'; points: readonly Point[] }
+  /** Brush diameter at half opacity. */
+  | { tool: 'brush'; points: readonly Point[]; sizePx: ImagePixels });
+/** Replay in order in oriented photo pixels. Opaque areas place the photo in front of the map.
+ * Keep only in page memory, like the photo itself. Never persist, transmit, log or include in errors. */
+export type Mask = readonly MaskOp[];
 /** Terrain/contours are excluded from the current product scope. */
 export type LayerId = 'roads' | 'hiking' | 'water' | 'places';
 /** `roads.kind`; classified at build time by data/roads.yml. */
