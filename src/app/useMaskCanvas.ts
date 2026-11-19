@@ -5,6 +5,7 @@ import { drawGuides, penHit, type PenHit, type Stroke } from './maskGuides.ts';
 import { MaskPreview } from './maskPreview.ts';
 import { toPhoto, viewScale, type Frame, type MaskView } from './maskView.ts';
 import type { MaskDetail } from './maskDetail.ts';
+import { typing } from './useMaskNavigation.ts';
 
 type Event = PointerEvent<HTMLCanvasElement>;
 type Gesture = { id: number; kind: 'stroke'; op: Stroke }
@@ -46,8 +47,7 @@ export function useMaskCanvas(state: MaskState, dispatch: (action: MaskAction) =
   useLayoutEffect(() => {
     if (!state.editing) return;
     function keydown(e: KeyboardEvent) {
-      const el = e.target;
-      if (el instanceof HTMLElement && (el.closest('input, textarea, select') || el.isContentEditable)) return;
+      if (typing(e.target)) return;
       const action = shortcut(e, state);
       if (action) {
         e.preventDefault();

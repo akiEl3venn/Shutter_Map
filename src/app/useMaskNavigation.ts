@@ -6,8 +6,14 @@ import type { MaskZoomStatus } from './maskZoomStatus.ts';
 type Event = PointerEvent<HTMLCanvasElement>;
 const middle = (a: Point, b: Point): Point => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-const typing = (target: EventTarget | null) => target instanceof HTMLElement &&
-  (target.isContentEditable || !!target.closest('input, select, textarea'));
+const TEXT_INPUTS = new Set(['text', 'search', 'number', 'email', 'url', 'tel', 'password']);
+/**
+ * Keys belong to a field only while someone types into it. A tool's radio button keeps focus after a click,
+ * and holding Space over the photo must still pan rather than press that button again.
+ */
+export const typing = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable
+  || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
+  || (target instanceof HTMLInputElement && TEXT_INPUTS.has(target.type)));
 
 export function useMaskNavigation(editing: boolean, canvasRef: RefObject<HTMLCanvasElement | null>,
   view: RefObject<MaskView>, frame: () => Frame, redraw: RefObject<() => void>, status: MaskZoomStatus,
