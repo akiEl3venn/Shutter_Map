@@ -39,6 +39,8 @@ export interface LabelCandidate {
   aliases?: string[];
   /** The one landmark to single out. */
   focus?: boolean;
+  custom?: true;
+  customId?: number;
 }
 
 /** What the map singles out, if anything: a chosen landmark, or wherever a photo was taken. */
@@ -120,9 +122,10 @@ export function layoutLabels(candidates: LabelCandidate[], options: {
   /** How far in from each edge, top first, the fade makes it a poor place for text. */
   fadeInsets?: readonly [number, number, number, number];
   measure: (text: string, fontPx: number) => number;
+  /** A custom label that cannot fit on either side of its marker, irrespective of collisions. */
+  outsideCustom?: (id: number) => void;
 }): PlacedLabel[] {
   const { widthPx, heightPx, maxCount, measure } = options;
-  if (maxCount === 0) return [];
   // Mountains have far more named peaks than fit, so the best known stand for the rest. Asking for more labels allows more.
   const maxPeaks = Math.max(2, Math.ceil(maxCount * 0.4));
   const u = options.scalePx / 2400;
@@ -139,14 +142,21 @@ export function layoutLabels(candidates: LabelCandidate[], options: {
   const spacing = labelStyle.spacing * u;
   const occupied: Box[] = [];
   const placed: PlacedLabel[] = [];
+  let automaticCount = 0;
   const sorted = [...candidates].sort((a, b) => Number(b.focus ?? false) - Number(a.focus ?? false)
+    || Number(b.custom ?? false) - Number(a.custom ?? false)
     || priority[a.kind] - priority[b.kind] || b.rank - a.rank || a.name.length - b.name.length);
 
   for (const point of sorted) {
-    if (placed.length >= maxCount) break;
+    if (!point.custom && automaticCount >= maxCount) {
+      // At zero a normal focus can precede custom labels. After the focus and
+      // custom group, every remaining candidate consumes the automatic quota.
+      if (point.focus) continue;
+      break;
+    }
     const { name, kind } = point;
     if (kind === 'peak' && placed.filter(p => p.kind === 'peak').length >= maxPeaks) continue;
-    if (kind === 'landmark' && !point.focus && maxCount <= DEFAULT_LABELS && point.rank < WELL_KNOWN) continue;
+    if (kind === 'landmark' && !point.focus && !point.custom && maxCount <= DEFAULT_LABELS && point.rank < WELL_KNOWN) continue;
     const dx = point.x - cx, dy = point.y - cy;
     // Anchors turn with the roads. Text, its collisions and the layer's edges all stay upright.
     const x = cx + dx * cos - dy * sin;
@@ -158,6 +168,7 @@ export function layoutLabels(candidates: LabelCandidate[], options: {
     const gap = markerRadius + pad;
     const positions = marker ? [x + gap, x - gap - width] : [x - width / 2];
 
+    let fitsLayer = false;
     for (const textX of positions) {
       // Keep both the text and any point marker clear of neighboring labels and the hard mask.
       const box = {
@@ -167,12 +178,15 @@ export function layoutLabels(candidates: LabelCandidate[], options: {
       };
       if (!containsCorner(box.left, box.top) || !containsCorner(box.right, box.top)
         || !containsCorner(box.left, box.bottom) || !containsCorner(box.right, box.bottom)) continue;
+      fitsLayer = true;
       if (occupied.some(b => box.left - spacing < b.right && box.right + spacing > b.left
         && box.top - spacing < b.bottom && box.bottom + spacing > b.top)) continue;
       placed.push({ ...point, x, y, marker, fontPx, textX, textY: y });
+      if (!point.custom) automaticCount++;
       occupied.push(box);
       break;
     }
+    if (!fitsLayer && point.customId !== undefined) options.outsideCustom?.(point.customId);
   }
   return placed;
 }

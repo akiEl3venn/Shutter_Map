@@ -17,11 +17,11 @@ function reduce(session: Session, action: EditAction | Sync): Session {
   if (action.type === 'sync') {
     const point = action.coordinate!;
     if (photo !== session.photo || !session.editor) return { photo, editor: createEditorState(size, point, action.focus, action.localLanguages) };
-    const { geographicCenter: [lon, lat], labels: { focus } } = session.editor.composition;
-    const sameFocus = JSON.stringify(focus) === JSON.stringify(action.focus);
+    const { geographicCenter: [lon, lat] } = session.editor.composition;
+    const sameFocus = JSON.stringify(session.editor.locationFocus) === JSON.stringify(action.focus);
     if (point[0] === lon && point[1] === lat && sameFocus) return session;
     const moved = editComposition(session.editor, { type: 'geographicCenter', value: point }, size);
-    return { photo, editor: editComposition(moved, { type: 'focus', value: action.focus }, size) };
+    return { photo, editor: sameFocus ? moved : editComposition(moved, { type: 'focus', value: action.focus }, size) };
   }
   return session.editor ? { photo, editor: editComposition(session.editor, action, size) } : session;
 }

@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MapComposition, PhotoSession } from '../contracts.ts';
 import { renderKey } from '../map/editComposition.ts';
 import { createMapClient } from '../map/mapClient.ts';
-import type { MapProgress } from '../map/mapProtocol.ts';
+import type { MapFrame, MapProgress } from '../map/mapProtocol.ts';
 import { lineColorFor } from '../map/style.ts';
 import type { Overlay } from './PhotoCanvas.tsx';
 
@@ -51,7 +51,9 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
   const [rendering, setRendering] = useState(false);
   const [crashed, setCrashed] = useState(false);
   const source = useRef<PhotoSession | null>(null);
-  const [frame, setFrame] = useState<{ sequence: number; overlay: Overlay | null }>({ sequence: 0, overlay: null });
+  type Placement = Pick<MapFrame, 'drawnCustomIds' | 'outsideCustomIds'>;
+  const [frame, setFrame] = useState<{ sequence: number; overlay: Overlay | null; placement: Placement | null }>(
+    { sequence: 0, overlay: null, placement: null });
   const sequence = useRef(0);
   const owned = useRef(new Map<number, ImageBitmap>());
   /** A draft is on its way or up, and the sharp frame that follows it has yet to be asked for. */
@@ -60,10 +62,10 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
     if (settleTimer.current !== null) clearTimeout(settleTimer.current);
     settleTimer.current = null;
   }
-  function replaceFrame(overlay: Overlay | null) {
+  function replaceFrame(overlay: Overlay | null, placement: Placement | null = null) {
     const serial = ++sequence.current;
     if (overlay) owned.current.set(serial, overlay.bitmap);
-    setFrame({ sequence: serial, overlay });
+    setFrame({ sequence: serial, overlay, placement });
   }
 
   const [client] = useState(() => createMapClient({
@@ -74,7 +76,8 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
     frame(value, request) {
       if (!source.current) { value.bitmap.close(); return; }
       replaceFrame({ bitmap: value.bitmap, composition: request.composition, photo: source.current,
-        key: renderKey(request.composition) + request.lineColor });
+        key: renderKey(request.composition) + request.lineColor }, value.complete
+          ? { drawnCustomIds: value.drawnCustomIds, outsideCustomIds: value.outsideCustomIds } : null);
       // Not ready after a draft: asking for the sharp frame would cancel an export started in between.
       if (value.complete && settleTimer.current === null) setRendering(false);
     },
@@ -147,6 +150,8 @@ export function useMapPreview(photo: PhotoSession | null, preview: ImageBitmap |
   const pending = rendering || (!!wanted && wanted !== lastKey.current);
   const ready = !!wanted && frame.overlay?.key === wanted && frame.overlay.photo === photo && !!progress
     && !pending && !crashed && progress.failed === 0 && progress.loaded === progress.total && progress.empty < progress.total;
-  return { progress, overlay: composition ? frame.overlay : null, rendering: pending, crashed, retry,
+  const placement = frame.overlay?.photo === photo && frame.overlay?.key === wanted ? frame.placement : null;
+  return { progress, overlay: composition ? frame.overlay : null, drawnCustomIds: placement?.drawnCustomIds ?? null,
+    outsideCustomIds: placement?.outsideCustomIds ?? null, rendering: pending, crashed, retry,
     exportLayer: client.exportLayer, ready };
 }

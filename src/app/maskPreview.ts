@@ -1,4 +1,4 @@
-import type { Mask, MaskOp } from '../contracts.ts';
+import type { Mask, MaskOp, Point } from '../contracts.ts';
 import { drawMask, drawOp } from '../map/mask.ts';
 
 type Brush = Extract<MaskOp, { tool: 'brush' }>;
@@ -27,12 +27,12 @@ export class MaskPreview {
     this.tint = surface(preview.width, preview.height);
   }
 
-  update(mask: Mask, brush: Brush | null, scale: number, tinted: boolean) {
+  update(mask: Mask, brush: Brush | null, scale: number, tinted: boolean, origin: Point = [0, 0]) {
     const changed = this.mask !== mask;
     const {width, height} = this.preview;
     if (changed) {
       this.committed.clearRect(0, 0, width, height);
-      drawMask(this.committed, mask, scale, [0, 0]);
+      drawMask(this.committed, mask, scale, origin);
       this.mask = mask;
     }
     const count = brush?.points.length ?? 0;
@@ -44,7 +44,7 @@ export class MaskPreview {
     const {shown, tint} = this;
     shown.globalCompositeOperation = 'copy';
     shown.drawImage(this.committed.canvas, 0, 0);
-    if (brush) drawOp(shown, brush, scale, [0, 0]);
+    if (brush) drawOp(shown, brush, scale, origin);
     if (tinted) {
       tint.globalCompositeOperation = 'copy';
       tint.drawImage(shown.canvas, 0, 0);

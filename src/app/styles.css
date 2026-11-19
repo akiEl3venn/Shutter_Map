@@ -185,4 +185,11 @@ dd { margin: 0.25rem 0 0; font-variant-numeric: tabular-nums; }
 .mask-slider small { white-space: nowrap; }
 /* The hint shares a row with the buttons, keeping the toolbar about as low as the export controls it stands in for. */
 .mask-actions { display: flex; flex-wrap: wrap; gap: .375rem; order: 2; margin-left: auto; }
-.mask-hint { order: 1; flex: 1 1 16rem; margin: 0; }
+.mask-hint { order: 1; flex: 1 1 16rem; margin: 0; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.mask-zoom { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.custom-places { display: grid; gap: .75rem; }
+.custom-places > button { justify-self: start; }
+.custom-place { display: grid; gap: .375rem; }
+.custom-place input[type=text] { width: 100%; min-width: 0; border: 1px solid #868d81; border-radius: 5px; padding: .5rem; font: inherit; }
+.custom-actions, .custom-picking { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.custom-actions button { font-size: .8rem; padding: .375rem .5rem; }

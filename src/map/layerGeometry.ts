@@ -1,4 +1,4 @@
-import type { LonLat, MapComposition, TileKey } from '../contracts.ts';
+import type { LonLat, MapComposition, Point, TileKey } from '../contracts.ts';
 import { lonLatToWorld, metersPerWorldUnit, worldToLonLat } from './mercator.ts';
 
 function sourcePixelsPerWorld(composition: MapComposition): number {
@@ -16,6 +16,16 @@ function worldToLayer(x: number, y: number, composition: MapComposition, scale: 
 export function projectToLayer(lonLat: LonLat, composition: MapComposition): [number, number] {
   const [x, y] = lonLatToWorld(lonLat);
   return worldToLayer(x, y, composition, sourcePixelsPerWorld(composition));
+}
+
+/** Undo the overlay's placement and rotation, then invert its local Mercator projection. */
+export function photoToLonLat([x, y]: Point, composition: MapComposition): LonLat {
+  const dx = x - composition.centerPx[0], dy = y - composition.centerPx[1];
+  const angle = -composition.rotationDegrees * Math.PI / 180;
+  const pixels = sourcePixelsPerWorld(composition);
+  const [cx, cy] = lonLatToWorld(composition.geographicCenter);
+  return worldToLonLat(cx + (dx * Math.cos(angle) - dy * Math.sin(angle)) / pixels,
+    Math.max(0, Math.min(1, cy + (dx * Math.sin(angle) + dy * Math.cos(angle)) / pixels)));
 }
 
 /** The drawn area in the layer's own coordinates. The layer is always upright on the photo: rotating turns the map inside it. */

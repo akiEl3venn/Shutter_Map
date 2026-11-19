@@ -22,6 +22,7 @@ import { exportFormats, type ExportFormat } from '../export/formats.ts';
 import { useExport } from './useExport.ts';
 import { useMasks } from './useMasks.ts';
 import { MaskToolbar } from './MaskToolbar.tsx';
+import { MaskZoomStatus } from './maskZoomStatus.ts';
 
 export function App() {
   const [photo, setPhoto] = useState<PhotoSession | null>(null);
@@ -49,6 +50,37 @@ export function App() {
   const { masks, editMasks } = useMasks(photo);
   const exporter = useExport(photo, drawn, map.exportLayer, masks.mask);
   const previewArea = useRef<HTMLElement>(null);
+  const [zoomStatus] = useState(() => new MaskZoomStatus());
+  const [pickId, setPickId] = useState<number | null>(null);
+  const nextCustomId = useRef(1);
+  const picking = editor?.composition.labels.custom.find(place => place.id === pickId);
+
+  function cancelPick() {
+    if (picking && !picking.coordinate) edit({ type: 'removeCustom', id: picking.id });
+    setPickId(null);
+  }
+
+  function startPick(existingId?: number) {
+    if (picking?.id !== existingId) cancelPick();
+    if (masks.editing) editMasks({ type: 'finish' });
+    const id = existingId ?? nextCustomId.current++;
+    if (existingId === undefined) edit({ type: 'addCustom', id });
+    setPickId(id);
+    previewArea.current?.scrollIntoView({ block: 'nearest' });
+  }
+
+  useEffect(() => {
+    if (!picking) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !event.isComposing) {
+        event.preventDefault();
+        if (picking && !picking.coordinate) edit({ type: 'removeCustom', id: picking.id });
+        setPickId(null);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [picking, edit]);
   const busy = exporter.state.status === 'decoding' || exporter.state.status === 'encoding';
 
   // Release a bitmap only after React has committed its replacement, so no draw can see it closed.
@@ -239,7 +271,13 @@ export function App() {
         <div className="stage">
           <section ref={previewArea} className="preview-area" aria-label={strings.previewLabel}>
             <PhotoCanvas preview={preview} photo={photo} overlay={map.overlay} composition={editor?.composition ?? null} drawn={drawn}
-              masks={masks} editMasks={editMasks} edit={edit}
+              masks={masks} editMasks={editMasks} edit={edit} zoomStatus={zoomStatus}
+              picking={!!picking} placeCustom={coordinate => {
+                if (!picking) return;
+                edit({ type: 'placeCustom', id: picking.id, value: coordinate });
+                setPickId(null);
+                document.getElementById('custom-name-' + picking.id)?.focus();
+              }}
               choosePoint={coordinate => chooseLocation({ source: 'coordinate', coordinate, focus: focusFor(location) })} />
             {!photo && <div className="empty-preview">
               <button type="button" onClick={() => inputRef.current?.click()}>{strings.selectPhoto}</button>
@@ -248,7 +286,10 @@ export function App() {
           </section>
           {photo && <section className="export-panel" aria-label={strings.exportTitle}>
             {/* In its place, not above it: a taller panel would shrink the photo just as the tracing starts. */}
-            {masks.editing ? <MaskToolbar state={masks} edit={editMasks} /> : <>
+            {picking ? <div className="custom-picking">
+              <span role="status">{strings.customPicking}</span>
+              <button type="button" className="secondary" onClick={cancelPick}>{strings.customCancel}</button>
+            </div> : masks.editing ? <MaskToolbar state={masks} edit={editMasks} zoomStatus={zoomStatus} /> : <>
               <div className="export-controls">
                 <label>{strings.exportFormat}
                   <select value={exporter.format} disabled={busy}
@@ -343,11 +384,16 @@ export function App() {
               </div>}
             </div>
           </section>
-          {photo && editor && drawn && <EditPanel state={editor} drawn={drawn} photo={photo} edit={edit} />}
+          {photo && editor && drawn && <EditPanel state={editor} drawn={drawn} photo={photo}
+            zoom={map.progress?.zoom} outsideCustomIds={map.outsideCustomIds} pick={startPick} edit={action => {
+              if (picking && action.type === 'layer' && action.layer === 'places' && !action.value) cancelPick();
+              edit(action);
+            }} />}
           {photo && editor && drawn && <section className="mask-panel" aria-labelledby="mask-title">
             <h2 id="mask-title">{strings.maskTitle}</h2>
             <p className="muted">{strings.maskNote}</p>
             <button type="button" aria-pressed={masks.editing} onClick={() => {
+              if (picking) cancelPick();
               editMasks({ type: masks.editing ? 'finish' : 'start' });
               if (!masks.editing) previewArea.current?.scrollIntoView({ block: 'nearest' });
             }}>{masks.editing ? strings.maskDone : strings.maskStart}</button>

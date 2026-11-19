@@ -12,7 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const run = promisify(execFile);
 const options = {
   osm: 'data-downloads/osm/asia-latest.osm.pbf', polygon: 'data/china.poly', coverage: '中国大陆和港澳台',
-  name: 'china-2026', heap: '12g', skipBuild: false,
+  name: 'china-2026-r2', heap: '12g', skipBuild: false,
 };
 for (let i = 2; i < process.argv.length; i++) {
   const arg = process.argv[i];

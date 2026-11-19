@@ -1,8 +1,20 @@
+import { useSyncExternalStore } from 'react';
+import type { MaskZoomStatus } from './maskZoomStatus.ts';
 import { NumberField, Radios, Range } from './EditPanel.tsx';
 import { brushMaxSize, maxFeather, type MaskAction, type MaskState } from './maskEditor.ts';
 import { strings as s } from './strings.ts';
 
-export function MaskToolbar({ state, edit }: { state: MaskState; edit: (action: MaskAction) => void }) {
+function ZoomControls({ status }: { status: MaskZoomStatus }) {
+  const { percent, fitted, failed } = useSyncExternalStore(status.subscribe, status.snapshot);
+  return <>
+    <span className="mask-zoom">{s.maskZoomLabel} {percent}% <button type="button" className="secondary"
+      disabled={fitted} onClick={() => status.fit()}>{s.maskZoomFit}</button></span>
+    {failed && <span>{s.maskFullFailed}</span>}
+  </>;
+}
+
+export function MaskToolbar({ state, edit, zoomStatus }: { state: MaskState; edit: (action: MaskAction) => void;
+  zoomStatus: MaskZoomStatus }) {
   const { tools, penDraft } = state;
   const sizeLimit = brushMaxSize(state.photo);
   const feather = tools.featherPx[tools.tool];
@@ -37,6 +49,7 @@ export function MaskToolbar({ state, edit }: { state: MaskState; edit: (action: 
         onClick={() => edit({ type: 'redo' })}>{s.maskRedo}</button>
       <button type="button" onClick={() => edit({ type: 'finish' })}>{s.maskDone}</button>
     </div>
-    <p className="mask-hint muted">{s.maskHints[tools.tool]}</p>
+    <div className="mask-hint muted"><span>{s.maskHints[tools.tool]} {s.maskZoomHint}</span>
+      <ZoomControls status={zoomStatus} /></div>
   </div>;
 }

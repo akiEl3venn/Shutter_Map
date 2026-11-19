@@ -12,7 +12,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
   const dx = x - target.widthPx / 2, dy = y - target.heightPx / 2;
   const angle = target.rotationDegrees * Math.PI / 180;
   ctx.save();
-  ctx.globalAlpha = target.style.opacity;
+  ctx.globalAlpha = 1;
   if (turn) {
     // Only the map turns. Until its new lines arrive, keep the turned old picture inside what the new one will cover.
     ctx.beginPath();

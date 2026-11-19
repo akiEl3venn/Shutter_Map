@@ -26,6 +26,8 @@ export interface MapFrame {
   id: number;
   bitmap: ImageBitmap;
   complete: boolean;
+  drawnCustomIds: readonly number[];
+  outsideCustomIds: readonly number[];
 }
 
 export interface ExportLayerRequest {

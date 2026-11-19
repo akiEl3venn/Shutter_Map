@@ -12,6 +12,8 @@ export type Anchor = readonly [column: 0 | 1 | 2, row: 0 | 1 | 2];
 export interface PhotoSize { widthPx: number; heightPx: number }
 export interface EditorState {
   composition: MapComposition;
+  /** Restored when a custom landmark stops being the focus. */
+  locationFocus: MapFocus | null;
   /** The reference point on the photo. The layer sits at this point plus offsetPx. */
   anchor: Anchor;
   marginPx: Point;
@@ -29,7 +31,11 @@ export type EditAction =
   | { type: 'geographicCenter'; value: LonLat }
   | { type: 'focus'; value: MapFocus | null }
   | { type: 'size' | 'width' | 'height' | 'rotation' | 'range' | 'circleFeather' |
-      'lineScale' | 'opacity' | 'maxCount'; value: number }
+      'lineScale' | 'lineOpacity' | 'labelOpacity' | 'maxCount'; value: number }
+  | { type: 'addCustom' | 'removeCustom'; id: number }
+  | { type: 'renameCustom'; id: number; value: string }
+  | { type: 'placeCustom'; id: number; value: LonLat }
+  | { type: 'focusCustom'; id: number; value: boolean }
   | { type: 'shape'; value: MapComposition['shape'] }
   | { type: 'sideFeather'; side: 0 | 1 | 2 | 3; value: number }
   | { type: 'allFeather'; value: number }
@@ -53,7 +59,7 @@ export function createEditorState(photo: PhotoSize, coordinate: LonLat, focus: M
     { orientedWidthPx: photo.widthPx, orientedHeightPx: photo.heightPx }, { coordinate },
   )!;
   const composition = { ...base, labels: { ...base.labels, focus, localLanguages } };
-  return { composition, anchor: [1, 1], marginPx: [0, 0], offsetPx: [0, 0], rectangleAspect: 1 / 2,
+  return { composition, locationFocus: focus, anchor: [1, 1], marginPx: [0, 0], offsetPx: [0, 0], rectangleAspect: 1 / 2,
     softSides: [false, false, false, false] };
 }
 
@@ -100,7 +106,8 @@ export function pannedCenter(start: LonLat, dxPx: number, dyPx: number, c: MapCo
 /** Placement can change without rendering a new layer. Compare the resolved line color separately. */
 export function renderKey(c: MapComposition): string {
   return JSON.stringify([c.widthPx, c.heightPx, c.raster, c.rotationDegrees, c.shape, c.metersPerImagePixel,
-    c.geographicCenter, c.detailOffset, c.visibleLayers, c.labels, c.feather, c.scalePx, c.style.lineScale]);
+    c.geographicCenter, c.detailOffset, c.visibleLayers, c.labels, c.feather, c.scalePx,
+    c.style.lineScale, c.style.lineOpacity, c.style.labelOpacity]);
 }
 
 function resized(c: MapComposition, width: number, min: number, max: number): MapComposition {
@@ -152,7 +159,11 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     Math.min(max, MAX_RANGE_KM * 1000 / c.metersPerImagePixel)));
 
   switch (action.type) {
-    case 'reset': return createEditorState(photo, c.geographicCenter, c.labels.focus, c.labels.localLanguages);
+    case 'reset': {
+      const reset = createEditorState(photo, c.geographicCenter, state.locationFocus, c.labels.localLanguages);
+      reset.composition.labels = { ...reset.composition.labels, custom: c.labels.custom, focus: c.labels.focus };
+      return reset;
+    }
     case 'offset': break; // It depends on the anchor's position for the final layer, below.
     case 'anchor':
       anchor = action.value;
@@ -183,7 +194,31 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
       c = { ...c, rotationDegrees: degrees, geographicCenter: turnedAroundFocus(c, degrees) }; break;
     }
     case 'geographicCenter': c = { ...c, geographicCenter: action.value }; break;
-    case 'focus': c = { ...c, labels: { ...c.labels, focus: action.value } }; break;
+    case 'focus': return { ...state, locationFocus: action.value,
+      composition: { ...c, labels: { ...c.labels, focus: action.value } } };
+    case 'addCustom':
+    case 'renameCustom':
+    case 'placeCustom':
+    case 'removeCustom':
+    case 'focusCustom': {
+      let custom = c.labels.custom;
+      let focusId = c.labels.focus?.customId;
+      switch (action.type) {
+        case 'addCustom': custom = [...custom, { id: action.id, name: '', coordinate: null }]; break;
+        case 'removeCustom': custom = custom.filter(place => place.id !== action.id); break;
+        case 'renameCustom': {
+          const name = Array.from(action.value.trim()).slice(0, 40).join('').trimEnd();
+          custom = custom.map(place => place.id === action.id ? { ...place, name } : place);
+          break;
+        }
+        case 'placeCustom': custom = custom.map(place => place.id === action.id ? { ...place, coordinate: action.value } : place); break;
+        case 'focusCustom': focusId = action.value ? action.id : undefined; break;
+      }
+      const selected = custom.find(place => place.id === focusId);
+      const focus = selected?.coordinate && selected.name
+        ? { customId: selected.id, name: selected.name, coordinate: selected.coordinate } : state.locationFocus;
+      return { ...state, composition: { ...c, labels: { ...c.labels, custom, focus } } };
+    }
     case 'range':
       c = { ...c, metersPerImagePixel: clamp(action.value, MIN_RANGE_KM, MAX_RANGE_KM) * 1000 / c.widthPx }; break;
     case 'circleFeather':
@@ -208,7 +243,8 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     }
     case 'color': c = { ...c, style: { ...c.style, color: action.value } }; break;
     case 'lineScale': c = { ...c, style: { ...c.style, lineScale: clamp(action.value, 0.5, 2) } }; break;
-    case 'opacity': c = { ...c, style: { ...c.style, opacity: clamp(action.value, 0.1, 1) } }; break;
+    case 'lineOpacity':
+    case 'labelOpacity': c = { ...c, style: { ...c.style, [action.type]: clamp(action.value, 0.1, 1) } }; break;
     case 'layer': c = { ...c, visibleLayers: { ...c.visibleLayers, [action.layer]: action.value } }; break;
     case 'detail': c = { ...c, detailOffset: action.value }; break;
     case 'language': c = { ...c, labels: { ...c.labels, language: action.value } }; break;
@@ -237,5 +273,5 @@ export function editComposition(state: EditorState, action: EditAction, photo: P
     return snapped > dimension ? snapped - 1 : snapped;
   };
   const centerPx: Point = [axis(x, center[0], photo.widthPx), axis(y, center[1], photo.heightPx)];
-  return { composition: { ...c, centerPx }, anchor, marginPx, offsetPx, rectangleAspect, softSides };
+  return { ...state, composition: { ...c, centerPx }, anchor, marginPx, offsetPx, rectangleAspect, softSides };
 }

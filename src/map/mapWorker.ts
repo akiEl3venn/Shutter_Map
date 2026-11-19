@@ -83,7 +83,7 @@ function exportLayer({ id, viewId }: ExportLayerRequest) {
       throw new Error('view-not-ready');
     }
     const { composition, lineColor } = view.request;
-    bitmap = renderLayer(tilesOf(view), composition, 1, lineColor, true);
+    bitmap = renderLayer(tilesOf(view), composition, 1, lineColor, true).bitmap;
     send({ type: 'export-layer', id, bitmap }, [bitmap]);
   } catch {
     bitmap?.close();
@@ -105,8 +105,9 @@ function scheduleFrame(view: View) {
     const complete = view.loaded.size === view.coverage.keys.length;
     let bitmap: ImageBitmap | undefined;
     try {
-      bitmap = renderLayer(tilesOf(view), composition, outputScale, lineColor, complete);
-      send({ type: 'frame', id, bitmap, complete }, [bitmap]);
+      const frame = renderLayer(tilesOf(view), composition, outputScale, lineColor, complete);
+      bitmap = frame.bitmap;
+      send({ type: 'frame', id, ...frame, complete }, [bitmap]);
       view.lastFrame = performance.now();
     } catch {
       bitmap?.close();

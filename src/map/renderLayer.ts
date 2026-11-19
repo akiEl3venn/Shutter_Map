@@ -58,6 +58,19 @@ function pathsToDraw({ paths, tiers }: PreparedTile, layer: StrokeLayer, spacing
 
 const font = (px: number) => `600 ${px}px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif`;
 
+// Use a whole 8-bit alpha in the bitmap. At half steps GPU rounding upwards before
+// source-over on the CPU can compound the error in the finished photo.
+const bitmapOpacity = (opacity: number) => Math.floor(opacity * 255) / 255;
+
+function fadeBitmap(ctx: OffscreenCanvasRenderingContext2D, opacity: number) {
+  if (opacity === 1) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.globalAlpha = bitmapOpacity(opacity);
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.restore();
+}
+
 type TilePlace = PreparedTile['places'][number];
 const chosenNames = new WeakMap<TilePlace, { language: string; spokenThere: boolean; name: string | undefined }>();
 
@@ -71,7 +84,7 @@ function labelName(place: TilePlace, language: string, spokenThere: boolean): st
 }
 
 function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly PreparedTile[],
-  composition: MapComposition, outputScale: number, lineColor: string) {
+  composition: MapComposition, outputScale: number, lineColor: string, opacity: number) {
   const candidates: LabelCandidate[] = [];
   const { focus, language, localLanguages } = composition.labels;
   const spokenThere = localLanguages.includes(language);
@@ -96,15 +109,23 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
     }
   }
   let marked = candidates;
-  if (focus) {
+  if (focus && focus.customId === undefined) {
     const [x, y] = projectToLayer(focus.coordinate, composition);
     marked = markFocus(candidates, { x, y, metersPerPx: composition.metersPerImagePixel, name: focus.name,
       englishName: focus.englishName, label: focusLabel(focus, language) });
   }
+  for (const place of composition.labels.custom) {
+    if (!place.coordinate || !place.name) continue;
+    const [x, y] = projectToLayer(place.coordinate, composition);
+    marked.push({ name: place.name, kind: 'landmark', x, y, rank: 0,
+      custom: true, customId: place.id, focus: focus?.customId === place.id });
+  }
+  const outsideCustomIds: number[] = [];
   const labels = layoutLabels(marked, {
     widthPx: composition.widthPx, heightPx: composition.heightPx, scalePx: composition.scalePx,
     rotationDegrees: composition.rotationDegrees, maxCount: composition.labels.maxCount, shape: composition.shape,
     fadeInsets: labelInsets(composition),
+    outsideCustom: id => outsideCustomIds.push(id),
     measure(text, px) {
       ctx.font = font(px);
       return ctx.measureText(text).width;
@@ -138,6 +159,7 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
     ctx.fillText(label.name, label.textX, label.textY);
   }
   ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = opacity;
   for (const label of labels) {
     ctx.fillStyle = label.focus ? focusColor : lineColor;
     if (label.marker) markerDot(label, labelStyle.markerRadius * u);
@@ -145,6 +167,8 @@ function drawLabels(ctx: OffscreenCanvasRenderingContext2D, tiles: readonly Prep
     ctx.fillText(label.name, label.textX, label.textY);
   }
   ctx.restore();
+  const drawnCustomIds = labels.flatMap(label => label.customId === undefined ? [] : [label.customId]);
+  return { drawnCustomIds, outsideCustomIds };
 }
 
 /** Fade one stroke class across the layer's edges, with the context's origin at the layer's top-left corner. */
@@ -185,7 +209,7 @@ function applyFade(ctx: OffscreenCanvasRenderingContext2D, composition: MapCompo
 
 /** Draw an isolated transparent map. Pass outputScale=1 for source resolution. */
 export function renderLayer(tiles: readonly PreparedTile[], composition: MapComposition,
-  outputScale: number, lineColor: string, complete: boolean): ImageBitmap {
+  outputScale: number, lineColor: string, complete: boolean) {
   const [rasterWidth, rasterHeight] = rasterSize(composition, outputScale);
   const width = composition.widthPx * outputScale, height = composition.heightPx * outputScale;
   const raster = rasterOf(composition);
@@ -206,6 +230,7 @@ export function renderLayer(tiles: readonly PreparedTile[], composition: MapComp
   // Clip the completed strokes, rather than the individual tile paths. On wide paths a curved clip can
   // change how Canvas tessellates a stroke well inside the circle.
   // A rectangle's edges are the canvas's. A circle's outer edge, where its fade ends, needs drawing.
+  ctx.save();
   if (composition.shape === 'circle') {
     ctx.beginPath();
     const feather = circleFeather(composition);
@@ -241,10 +266,17 @@ export function renderLayer(tiles: readonly PreparedTile[], composition: MapComp
     ctx.globalAlpha = layerLook[layer].alpha;
     ctx.drawImage(scratch, 0, 0);
   }
-  ctx.globalAlpha = 1;
+  ctx.restore();
   scratch.width = scratch.height = 0;
-  if (complete && composition.visibleLayers.places && composition.labels.maxCount > 0) {
-    drawLabels(ctx, tiles, composition, outputScale, lineColor);
-  }
-  return canvas.transferToImageBitmap();
+  const { lineOpacity, labelOpacity } = composition.style;
+  const sharedOpacity = lineOpacity === labelOpacity;
+  if (!sharedOpacity) fadeBitmap(ctx, lineOpacity);
+  const drawPlaces = complete && composition.visibleLayers.places
+    && (composition.labels.maxCount > 0 || composition.labels.custom.length > 0);
+  const placement = drawPlaces
+    ? drawLabels(ctx, tiles, composition, outputScale, lineColor, sharedOpacity ? 1 : bitmapOpacity(labelOpacity))
+    : { drawnCustomIds: [], outsideCustomIds: [] };
+  // At matching opacities, preserve the previous group blend at antialiased text edges.
+  if (sharedOpacity) fadeBitmap(ctx, lineOpacity);
+  return { bitmap: canvas.transferToImageBitmap(), ...placement };
 }

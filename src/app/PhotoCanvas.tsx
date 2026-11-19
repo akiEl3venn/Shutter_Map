@@ -5,6 +5,11 @@ import { pannedCenter, type EditAction } from '../map/editComposition.ts';
 import { strings } from './strings.ts';
 import { useMaskCanvas } from './useMaskCanvas.ts';
 import type { MaskAction, MaskState } from './maskEditor.ts';
+import { photoToLonLat } from '../map/layerGeometry.ts';
+import { FIT, centerOf, clampView, toPhoto, viewScale, type MaskView } from './maskView.ts';
+import type { MaskZoomStatus } from './maskZoomStatus.ts';
+import { MaskDetail } from './maskDetail.ts';
+import { useMaskNavigation } from './useMaskNavigation.ts';
 
 export interface Overlay {
   bitmap: ImageBitmap;
@@ -16,7 +21,8 @@ export interface Overlay {
 type Point = readonly [number, number];
 type Drag = { id: number; from: Point; start: MapComposition; moved: boolean };
 
-export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit, choosePoint, masks, editMasks }: {
+export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit, choosePoint, masks, editMasks,
+  zoomStatus, picking, placeCustom }: {
   preview: ImageBitmap | null;
   photo: PhotoSession | null;
   overlay: Overlay | null;
@@ -28,14 +34,32 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
   choosePoint: (point: LonLat) => void;
   masks: MaskState;
   editMasks: (action: MaskAction) => void;
+  zoomStatus: MaskZoomStatus;
+  picking: boolean;
+  placeCustom: (coordinate: LonLat) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const redraw = useRef<() => void>(() => {});
   const drag = useRef<Drag | null>(null);
   const [hover, setHover] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const interactive = !masks.editing && !!composition && !!drawn && !!photo && overlay?.photo === photo;
-  const maskCanvas = useMaskCanvas(masks, editMasks, preview, redraw, canvasRef);
+  const interactive = !picking && !masks.editing && !!composition && !!drawn && !!photo && overlay?.photo === photo;
+  const view = useRef<MaskView>(FIT);
+  const detail = useRef<MaskDetail | undefined>(undefined);
+  const pick = useRef<{id: number; from: Point; moved: boolean} | null>(null);
+  const maskCanvas = useMaskCanvas(masks, editMasks, preview, redraw, canvasRef, view);
+  function frame() {
+    const r = canvasRef.current!.getBoundingClientRect();
+    return { widthCss: r.width, heightCss: r.height, photo: {
+      widthPx: photo!.orientedWidthPx, heightPx: photo!.orientedHeightPx } };
+  }
+  const nav = useMaskNavigation(masks.editing, canvasRef, view, frame, redraw, zoomStatus, maskCanvas.interrupt);
+  useLayoutEffect(() => {
+    view.current = FIT;
+    if (masks.editing && photo) detail.current = new MaskDetail(photo, () => redraw.current());
+    return () => { detail.current?.dispose(); detail.current = undefined; };
+  }, [photo, masks.editing]);
+  useLayoutEffect(() => { pick.current = null; }, [picking, photo]);
   useLayoutEffect(() => {
     drag.current = null;
     setDragging(false);
@@ -43,16 +67,27 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
   }, [photo, interactive]);
 
   function point(event: PointerEvent<HTMLCanvasElement>): Point {
-    const { left, top, width, height } = event.currentTarget.getBoundingClientRect();
-    const scale = Math.min(width / photo!.orientedWidthPx, height / photo!.orientedHeightPx);
-    return [(event.clientX - left - width / 2) / scale + photo!.orientedWidthPx / 2,
-      (event.clientY - top - height / 2) / scale + photo!.orientedHeightPx / 2];
+    const { left, top } = event.currentTarget.getBoundingClientRect();
+    return toPhoto(view.current, frame(), event.clientX - left, event.clientY - top);
   }
   /** Anywhere on the photo grabs the map, which is what the hand expects to be moving. */
   function hit(p: Point) {
     return interactive && p[0] >= 0 && p[1] >= 0 && p[0] <= photo!.orientedWidthPx && p[1] <= photo!.orientedHeightPx;
   }
   function move(event: PointerEvent<HTMLCanvasElement>, finish = false) {
+    if (picking) {
+      const tap = pick.current;
+      if (!tap || tap.id !== event.pointerId || !photo || !drawn) return;
+      if (Math.hypot(event.clientX - tap.from[0], event.clientY - tap.from[1]) > 4) tap.moved = true;
+      if (finish) {
+        pick.current = null;
+        const [x, y] = point(event);
+        if (!tap.moved && x >= 0 && y >= 0 && x <= photo.orientedWidthPx && y <= photo.orientedHeightPx) {
+          placeCustom(photoToLonLat([x, y], drawn));
+        }
+      }
+      return;
+    }
     if (!interactive) return;
     const p = point(event);
     const d = drag.current;
@@ -88,13 +123,24 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, w, h);
       if (!preview || !photo) return;
-      // One contain transform in oriented source pixels for both bitmaps.
-      const scale = Math.min(w / photo.orientedWidthPx, h / photo.orientedHeightPx);
-      ctx.setTransform(scale, 0, 0, scale, (w - photo.orientedWidthPx * scale) / 2,
-        (h - photo.orientedHeightPx * scale) / 2);
+      const f = { widthCss: width, heightCss: height, photo: { widthPx: photo.orientedWidthPx, heightPx: photo.orientedHeightPx } };
+      view.current = clampView(view.current, f);
+      const fitted = view.current.zoom === 1, cssScale = viewScale(view.current, f);
+      const scale = fitted ? Math.min(w / f.photo.widthPx, h / f.photo.heightPx) : cssScale * dpr;
+      const [cx, cy] = centerOf(view.current, f);
+      ctx.setTransform(scale, 0, 0, scale, w / 2 - cx * scale, h / 2 - cy * scale);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(preview, 0, 0, photo.orientedWidthPx, photo.orientedHeightPx);
+      const fine = detail.current;
+      if (fine) {
+        if (!fitted && scale > preview.width / f.photo.widthPx) {
+          fine.view(cx - w / (2 * scale), cy - h / (2 * scale), cx + w / (2 * scale), cy + h / (2 * scale), scale);
+        } else fine.invalidate();
+        zoomStatus.update(Math.round(cssScale * 100), fitted, fine.failed);
+      }
+      const crop = fine?.crop;
+      if (crop) ctx.drawImage(crop.image, crop.x, crop.y, crop.width, crop.height);
+      else ctx.drawImage(preview, 0, 0, photo.orientedWidthPx, photo.orientedHeightPx);
       if (overlay?.photo === photo && drawn) {
         ctx.save();
         ctx.beginPath();
@@ -103,10 +149,11 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
         drawOverlay(ctx, overlay.bitmap, overlay.composition, drawn);
         ctx.restore();
       }
-      maskCanvas.draw(ctx, photo.orientedWidthPx, photo.orientedHeightPx, dpr / scale);
+      maskCanvas.draw(ctx, photo.orientedWidthPx, photo.orientedHeightPx, dpr / scale, fine);
+      if (masks.editing) nav.cursor();
     };
     redraw.current();
-  }, [preview, photo, overlay, drawn, masks]);
+  }, [preview, photo, overlay, drawn, masks, zoomStatus]);
 
   useLayoutEffect(() => {
     const draw = () => redraw.current();
@@ -120,10 +167,20 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
   }, []);
   return <canvas ref={canvasRef} aria-label={strings.previewLabel} role="img"
     tabIndex={masks.editing ? 0 : undefined}
-    style={{ touchAction: interactive || masks.editing ? 'none' : undefined,
-      cursor: masks.editing ? 'crosshair' : dragging ? 'grabbing' : hover ? 'grab' : undefined }}
+    style={{ touchAction: interactive || masks.editing || picking ? 'none' : undefined,
+      cursor: masks.editing || picking ? 'crosshair' : dragging ? 'grabbing' : hover ? 'grab' : undefined }}
+    onPointerEnter={() => { nav.over.current = true; }}
     onPointerDown={e => {
-      if (masks.editing) { maskCanvas.down(e); return; }
+      if (masks.editing) { if (!nav.down(e)) maskCanvas.down(e); return; }
+      if (picking) {
+        if (e.button === 0 && !pick.current) {
+          // A touch otherwise synthesizes mousedown after pointerup and steals the name field's new focus.
+          e.preventDefault();
+          pick.current = {id: e.pointerId, from: [e.clientX, e.clientY], moved: false};
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }
+        return;
+      }
       if (!interactive || drag.current || e.button !== 0) return;
       const from = point(e);
       if (!hit(from)) return;
@@ -131,11 +188,13 @@ export function PhotoCanvas({ preview, photo, overlay, composition, drawn, edit,
       drag.current = { id: e.pointerId, from, start: composition!, moved: false };
       setDragging(true);
     }}
-    onPointerMove={e => masks.editing ? maskCanvas.move(e) : move(e)}
-    onPointerUp={e => masks.editing ? maskCanvas.move(e, true) : move(e, true)}
-    onPointerLeave={() => masks.editing ? maskCanvas.leave() : setHover(false)}
+    onPointerMove={e => { if (!masks.editing) move(e); else if (!nav.move(e)) maskCanvas.move(e); }}
+    onPointerUp={e => { if (!masks.editing) move(e, true); else if (!nav.end(e)) maskCanvas.move(e, true); }}
+    onPointerLeave={() => { nav.over.current = false; if (masks.editing) maskCanvas.leave(); else setHover(false); }}
+    onPointerCancel={e => { nav.end(e); maskCanvas.cancel(e.pointerId); pick.current = null; }}
     onLostPointerCapture={e => {
-      if (masks.editing) { maskCanvas.cancel(e.pointerId); return; }
+      if (picking) { pick.current = null; return; }
+      if (masks.editing) { nav.end(e); maskCanvas.cancel(e.pointerId); return; }
       const d = drag.current;
       if (!d) return;
       if (d.moved && composition) choosePoint(composition.geographicCenter);

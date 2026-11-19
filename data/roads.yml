@@ -15,6 +15,11 @@ sources:
     local_path: '${ args.osm_path }'
 
 definitions:
+  # This threshold applies only to features classified as landmarks in place_attributes.
+  linked_landmark: &linked_landmark >-
+    ${ feature.tags.has("wikidata")
+    && !feature.tags.has("place", "city", "town", "village", "suburb", "quarter", "neighbourhood")
+    && !feature.tags.has("natural", "peak", "volcano") }
   # Named places to label and to search for. Some classes only qualify with a Wikidata link: an ordinary neighbourhood
   # temple or park is not a landmark, and without the link there are far too many of them.
   landmark_tags: &landmark_tags
@@ -200,7 +205,10 @@ layers:
       overrides:
         4: { place: city }
         8: { place: town }
-        10: { natural: [peak, volcano] }
+        10:
+          __any__:
+          - natural: [peak, volcano]
+          - *linked_landmark
         11: { place: village }
     include_when:
       __any__:
@@ -213,7 +221,10 @@ layers:
     attributes: *place_attributes
   - source: osm
     geometry: polygon_point_on_surface
-    min_zoom: 12
+    min_zoom:
+      default_value: 12
+      overrides:
+        10: *linked_landmark
     include_when:
       __any__:
       - *landmark_tags

@@ -6,6 +6,7 @@ import { languageName, languageOptions, readerLanguage } from '../map/languages.
 import { MAX_FEATHER_PERCENT, circleFeather, sideFeather } from '../map/style.ts';
 import { scrubbedValue } from './scrub.ts';
 import { strings as s } from './strings.ts';
+import { tileset } from '../map/tileset.ts';
 
 type Edit = (action: EditAction) => void;
 type FourSides = [number, number, number, number];
@@ -76,14 +77,14 @@ export function NumberField({ label, value, min, max, step = 1, unit, log, chang
   </span></label>;
 }
 
-export function Range({ label, value, min, max, step = 1, display, change, compact }: {
+export function Range({ label, value, min, max, step = 1, display, change, compact, disabled }: {
   label: string; value: number; min: number; max: number; step?: number; display: string;
-  change: (value: number) => void; compact?: boolean;
+  change: (value: number) => void; compact?: boolean; disabled?: boolean;
 }) {
   return <label className="edit-range">
     <span className={compact ? 'sr-only' : 'edit-range-name'}>{label} <span>{display}</span></span>
     <input type="range" aria-label={label} aria-valuetext={display} min={min} max={max} step={step}
-      value={value} onChange={e => change(e.currentTarget.valueAsNumber)} />
+      disabled={disabled} value={value} onChange={e => change(e.currentTarget.valueAsNumber)} />
   </label>;
 }
 
@@ -181,8 +182,21 @@ function Shape({ c, drawn, inCorner, edit }: { c: MapComposition; drawn: MapComp
   </Group>;
 }
 
+function LandmarkName({ id, name, edit }: { id: number; name: string; edit: Edit }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return <input type="text" id={'custom-name-' + id} value={draft ?? name}
+    aria-label={s.customNamePlaceholder} placeholder={s.customNamePlaceholder} autoComplete="off"
+    onChange={e => setDraft(e.currentTarget.value)}
+    onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.currentTarget.blur(); }}
+    onBlur={() => {
+      if (draft !== null && draft !== name) edit({ type: 'renameCustom', id, value: draft });
+      setDraft(null);
+    }} />;
+}
+
 interface EditPanelProps {
   state: EditorState; drawn: MapComposition; photo: PhotoSession; edit: Edit;
+  zoom?: number; outsideCustomIds: readonly number[] | null; pick: (id?: number) => void;
 }
 export function EditPanel(props: EditPanelProps) {
   const { state, drawn, edit } = props;
@@ -205,8 +219,10 @@ export function EditPanel(props: EditPanelProps) {
       </label>}
       <Range label={s.lineWidth} min={50} max={200} value={c.style.lineScale * 100}
         display={format(c.style.lineScale * 100) + '%'} change={n => edit({ type: 'lineScale', value: n / 100 })} />
-      <Range label={s.opacity} min={10} max={100} value={c.style.opacity * 100}
-        display={format(c.style.opacity * 100) + '%'} change={n => edit({ type: 'opacity', value: n / 100 })} />
+      <Range label={s.lineOpacity} min={10} max={100} value={c.style.lineOpacity * 100}
+        display={format(c.style.lineOpacity * 100) + '%'} change={n => edit({ type: 'lineOpacity', value: n / 100 })} />
+      <Range label={s.labelOpacity} min={10} max={100} value={c.style.labelOpacity * 100} disabled={!c.visibleLayers.places}
+        display={format(c.style.labelOpacity * 100) + '%'} change={n => edit({ type: 'labelOpacity', value: n / 100 })} />
     </Group>
     <Group title={s.editLayers}>
       <div className="edit-columns">{(Object.keys(layerNames) as LayerId[]).map(layer => <label className="edit-check" key={layer}>
@@ -227,6 +243,23 @@ export function EditPanel(props: EditPanelProps) {
           change={value => edit({ type: 'maxCount', value })} />
         <label className="edit-check"><input type="checkbox" checked={c.labels.showAreas}
           onChange={e => edit({ type: 'showAreas', value: e.currentTarget.checked })} />{s.labelAreas}</label>
+        {c.visibleLayers.places && props.zoom !== undefined && props.zoom < tileset.landmarkMinZoom &&
+          <p className="muted">{s.labelsLowZoom}</p>}
+        <fieldset className="custom-places"><legend>{s.customTitle}</legend>
+          {c.labels.custom.map(place => <div className="custom-place" key={place.id}>
+            <LandmarkName id={place.id} name={place.name} edit={edit} />
+            <div className="custom-actions">
+              <button type="button" className="secondary" onClick={() => props.pick(place.id)}>{s.customPick}</button>
+              <label className="edit-check"><input type="checkbox" checked={c.labels.focus?.customId === place.id}
+                disabled={!place.coordinate || !place.name}
+                onChange={e => edit({ type: 'focusCustom', id: place.id, value: e.currentTarget.checked })} />{s.customFocus}</label>
+              <button type="button" className="secondary" onClick={() => edit({ type: 'removeCustom', id: place.id })}>{s.customRemove}</button>
+            </div>
+            {c.visibleLayers.places && props.outsideCustomIds?.includes(place.id) &&
+              <p className="muted">{s.customOutside}</p>}
+          </div>)}
+          <button type="button" className="secondary" onClick={() => props.pick()}>{s.customAdd}</button>
+        </fieldset>
       </fieldset>
     </Group>
     <button type="button" className="secondary" onClick={() => edit({ type: 'reset' })}>{s.resetComposition}</button>

@@ -40,6 +40,7 @@ export interface Tileset {
   name: string;
   baseUrl: string;
   maxZoom: number;
+  landmarkMinZoom: number;
   sourceTimestamp: string;
   attribution: string;
 }
@@ -82,7 +83,11 @@ export interface MapFocus {
   coordinate: LonLat;
   name?: string;
   englishName?: string;
+  customId?: number;
 }
+
+/** A label placed by the user. Its name and coordinate stay in page memory. */
+export interface CustomLandmark { id: number; name: string; coordinate: LonLat | null }
 
 export interface LocationChoice {
   coordinate: LonLat;
@@ -102,7 +107,10 @@ export interface MapComposition {
   style: {
     color: 'auto' | `#${string}`;
     lineScale: number;
-    opacity: number;
+    /** Roads, trails and water. */
+    lineOpacity: number;
+    /** Place names and their markers, including the focus. */
+    labelOpacity: number;
   };
   rotationDegrees: number;
   shape: 'circle' | 'square' | 'rectangle';
@@ -120,6 +128,7 @@ export interface MapComposition {
     /** Cities, towns and districts. Off by default: named areas crowd the map, while landmarks are what people look for. */
     showAreas: boolean;
     focus: MapFocus | null;
+    custom: readonly CustomLandmark[];
   };
   /** How wide the fade along each edge is. Style's fadeInside says how it lies across that edge. */
   feather: {
