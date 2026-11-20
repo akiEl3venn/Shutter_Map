@@ -32,7 +32,7 @@ export const strings = {
   mapWaiting: '选择照片和位置后加载地图数据',
   mapStarting: '正在加载地图数据…',
   mapReady: '地图数据已就绪',
-  mapNoData: '这里没有地图数据。封闭测试目前只覆盖中国大陆和港澳台。',
+  mapNoData: '这里没有地图数据。封闭测试目前覆盖中国大陆、港澳台、日本、韩国和东南亚。',
   mapReduced: '已自动降低细节',
   mapProgress: (loaded: number, total: number) => `正在加载地图数据 ${loaded}/${total}`,
   mapDebug: (zoom: number, total: number, bytes: number, empty: number) =>
@@ -92,7 +92,7 @@ export const strings = {
   geoLoading: '正在加载地名数据…',
   geoFailed: '地名数据加载失败',
   retry: '重试',
-  noResults: '没有找到，换个写法试试。封闭测试目前只覆盖中国大陆和港澳台。',
+  noResults: '没有找到，换个写法试试。封闭测试目前覆盖中国大陆、港澳台、日本、韩国和东南亚。',
   typeMore: '再输入一个字',
   resultsLabel: '地点搜索结果',
   resultsCount: (count: number) => `${count} 条结果，可用上下键选择，回车确认。`,
@@ -136,5 +136,5 @@ export const featureNames: Record<string, string> = {
   LK: '湖泊', FLLS: '瀑布', GLCR: '冰川', PRK: '公园', RESN: '自然保护区',
   BLDG: '建筑', WALL: '城墙', WALLA: '城墙遗址', MTS: '山脉', HBR: '港湾', GRGE: '峡谷',
   BAY: '海湾', CAPE: '海岬', AMUS: '游乐园', GDN: '园林', SQR: '广场', SHRN: '寺社',
-  GATE: '城门', OBS: '天文台', CH: '教堂', RLG: '宗教场所', AREA: '地区',
+  GATE: '城门', OBS: '天文台', CH: '教堂', RLG: '宗教场所', PGDA: '佛塔', AREA: '地区',
 };

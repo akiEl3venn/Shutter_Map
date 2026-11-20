@@ -7,7 +7,7 @@ import { gzipSync } from 'node:zlib';
 import { normalize } from '../src/search/normalize.ts';
 import { readLandmarks } from './osm-landmarks.mjs';
 
-const LANDMARK_CODES = new Set('MUS CSTL MNMT TOWR LTHSE RUIN TMPL PAL HSTS ANS BDG STDM ZOO PYR MT PK VLC CNYN ISL LK FLLS GLCR PRK RESN BLDG WALL WALLA MTS HBR GRGE BAY CAPE AMUS GDN SQR SHRN GATE OBS CH RLG'.split(' '));
+const LANDMARK_CODES = new Set('MUS CSTL MNMT TOWR LTHSE RUIN TMPL PGDA PAL HSTS ANS BDG STDM ZOO PYR MT PK VLC CNYN ISL LK FLLS GLCR PRK RESN BLDG WALL WALLA MTS HBR GRGE BAY CAPE AMUS GDN SQR SHRN GATE OBS CH RLG'.split(' '));
 const CITY_CENTRES = new Set(['PPLC', 'PPLA', 'PPLG']);
 const EXCLUDED_CITIES = new Set(['PPLX', 'PPLH', 'PPLQ', 'PPLW']);
 const NON_LANGUAGES = new Set(['link', 'post', 'iata', 'icao', 'faac', 'abbr', 'wkdt', 'unlc', '']);
@@ -383,7 +383,9 @@ export async function main(args = process.argv.slice(2)) {
     if (!line || line.startsWith('#')) continue;
     const fields = line.split('\t');
     if (!options.countries || options.countries.has(fields[0])) countryInfo.set(fields[0], {
-      code: fields[0], continent: fields[8] ?? '', name: fields[4] ?? '', primaryLanguage: (fields[15] ?? '').split(',')[0].split('-')[0],
+      code: fields[0], name: fields[4] ?? '', primaryLanguage: (fields[15] ?? '').split(',')[0].split('-')[0],
+      // UN M49 groups Timor-Leste in South-eastern Asia, while the GeoNames country file uses Oceania.
+      continent: fields[0] === 'TL' ? 'AS' : fields[8] ?? '',
     });
   }
   const admins = [];

@@ -12,7 +12,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tiles:build": "node scripts/build-tiles.mjs",
-    "geo:build": "node scripts/build-geo.mjs --countries CN,HK,MO,TW --landmarks data-downloads/tiles-built/china-2026.pmtiles --major-landmarks 50000",
+    "geo:build": "node scripts/build-geo.mjs --countries CN,HK,MO,TW,JP,KR,VN,LA,KH,TH,MM,MY,SG,BN,ID,TL,PH --landmarks data-downloads/tiles-built/east-southeast-asia-2026.pmtiles --major-landmarks 50000",
     "names:check": "node scripts/build-geo.mjs --check-names"
   },
   "dependencies": {

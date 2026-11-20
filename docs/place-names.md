@@ -17,7 +17,7 @@ Use actual tabs between columns. The ID must be a positive integer; names must b
 
 In `zh.tsv`, the first entry for each ID becomes its Chinese **display name**, overriding GeoNames. Use simplified Chinese. Additional entries for that ID are searchable **aliases**. Traditional characters are matched automatically, so add a traditional-language alias only when the wording differs, such as `雪梨` for `悉尼`.
 
-Entries in other languages are searchable aliases and do not replace the display name. Community aliases appear before GeoNames aliases and are exempt from the ten-alias limit. Only locations selected by a build receive names; entries outside its coverage are skipped and counted. The current build covers China, Hong Kong, Macau, Taiwan, Japan and South Korea.
+Entries in other languages are searchable aliases and do not replace the display name. Community aliases appear before GeoNames aliases and are exempt from the ten-alias limit. Only locations selected by a build receive names; entries outside its coverage are skipped and counted. The current build covers China, Hong Kong, Macau, Taiwan, Japan, South Korea and Southeast Asia (Vietnam, Laos, Cambodia, Thailand, Myanmar, Malaysia, Singapore, Brunei, Indonesia, Timor-Leste and the Philippines).
 
 Before opening a pull request, run:
 

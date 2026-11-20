@@ -15,6 +15,7 @@ export function foldCjk(text: string): string {
 
 export function normalize(text: string): string {
   // NFKD and mark stripping are identities on printable ASCII, the bulk of place names.
-  const decomposed = printableAscii.test(text) ? text : text.normalize('NFKD').replace(/[\u0300-\u036f]/gu, '');
+  const decomposed = printableAscii.test(text) ? text
+    : text.normalize('NFKD').replace(/[\u0300-\u036f]/gu, '').replace(/[Đđ]/gu, 'd');
   return foldCjk(decomposed.toLowerCase().replace(/[\p{P}\s]+/gu, ' ').trim());
 }

@@ -79,6 +79,8 @@ definitions:
     - { key: "name:et", tag_value: "name:et" }
     - { key: "name:fa", tag_value: "name:fa" }
     - { key: "name:fi", tag_value: "name:fi" }
+    - key: "name:fil"
+      value: '${ coalesce(feature.tags.get("name:fil"), feature.tags.get("name:tl")) }'
     - { key: "name:fr", tag_value: "name:fr" }
     - { key: "name:he", tag_value: "name:he" }
     - { key: "name:hi", tag_value: "name:hi" }
@@ -91,11 +93,14 @@ definitions:
     - { key: "name:ja", tag_value: "name:ja" }
     - { key: "name:ka", tag_value: "name:ka" }
     - { key: "name:kk", tag_value: "name:kk" }
+    - { key: "name:km", tag_value: "name:km" }
     - { key: "name:ko", tag_value: "name:ko" }
+    - { key: "name:lo", tag_value: "name:lo" }
     - { key: "name:lt", tag_value: "name:lt" }
     - { key: "name:lv", tag_value: "name:lv" }
     - { key: "name:mk", tag_value: "name:mk" }
     - { key: "name:ms", tag_value: "name:ms" }
+    - { key: "name:my", tag_value: "name:my" }
     - { key: "name:nl", tag_value: "name:nl" }
     - { key: "name:no", tag_value: "name:no" }
     - { key: "name:pl", tag_value: "name:pl" }
